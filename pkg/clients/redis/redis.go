@@ -18,6 +18,7 @@ package redis
 
 import (
 	"context"
+	"encoding/json"
 	"strconv"
 	"time"
 
@@ -44,6 +45,15 @@ const (
 	// VPCNetworkType indicates network type by vpc
 	VPCNetworkType = "VPC"
 )
+
+// Same server error but without requestID
+type CleanedServerError struct {
+	HttpStatus int
+	HostId     string
+	Code       string
+	Message    string
+	Comment    string
+}
 
 // Client defines Redis client operations
 type Client interface {
@@ -96,7 +106,7 @@ type client struct {
 func NewClient(ctx context.Context, accessKeyID, accessKeySecret, region string) (Client, error) {
 	redisCli, err := aliredis.NewClientWithAccessKey(region, accessKeyID, accessKeySecret)
 	if err != nil {
-		return nil, err
+		return nil, CleanError(err)
 	}
 	c := &client{redisCli: redisCli}
 	return c, nil
@@ -110,7 +120,7 @@ func (c *client) DescribeDBInstance(id string) (*DBInstance, error) {
 
 	response, err := c.redisCli.DescribeInstances(request)
 	if err != nil {
-		return nil, errors.Wrap(err, "cannot describe redis instance")
+		return nil, errors.Wrap(CleanError(err), "cannot describe redis instance")
 	}
 	if len(response.Instances.KVStoreInstance) == 0 {
 		return nil, ErrDBInstanceNotFound
@@ -142,7 +152,7 @@ func (c *client) CreateDBInstance(req *CreateRedisInstanceRequest) (*DBInstance,
 	}
 	resp, err := c.redisCli.CreateInstance(request)
 	if err != nil {
-		return nil, err
+		return nil, CleanError(err)
 	}
 
 	return &DBInstance{
@@ -163,7 +173,7 @@ func (c *client) CreateAccount(id, user, pw string) error {
 	request.ReadTimeout = DefaultReadTime
 
 	_, err := c.redisCli.CreateAccount(request)
-	return err
+	return CleanError(err)
 }
 
 func (c *client) DeleteDBInstance(id string) error {
@@ -173,7 +183,7 @@ func (c *client) DeleteDBInstance(id string) error {
 	request.InstanceId = id
 
 	_, err := c.redisCli.DeleteInstance(request)
-	return err
+	return CleanError(err)
 }
 
 // GenerateObservation is used to produce v1alpha1.RedisInstanceObservation from
@@ -223,7 +233,7 @@ func (c *client) AllocateInstancePublicConnection(id string, port int) (string, 
 	request.ReadTimeout = DefaultReadTime
 	_, err := c.redisCli.AllocateInstancePublicConnection(request)
 	if err != nil {
-		return "", err
+		return "", CleanError(err)
 	}
 	return request.ConnectionStringPrefix, err
 }
@@ -237,7 +247,7 @@ func (c *client) ModifyDBInstanceConnectionString(id string, port int) (string, 
 	request.ReadTimeout = DefaultReadTime
 	_, err := c.redisCli.ModifyDBInstanceConnectionString(request)
 	if err != nil {
-		return "", err
+		return "", CleanError(err)
 	}
 	return request.CurrentConnectionString, err
 }
@@ -259,5 +269,35 @@ func (c *client) modifyInstanceSpec(id string, req *ModifyRedisInstanceRequest) 
 	request.InstanceClass = req.InstanceClass
 	request.ReadTimeout = DefaultReadTime
 	_, err := c.redisCli.ModifyInstanceSpec(request)
+	return CleanError(err)
+}
+
+// 2024-05-14: Henry
+// Try to remove requestID from AliCloud SDK errors
+// Returning error with requestID will cause Crossplane reconciler to treat the errors
+// as a sequence of unique errors and insert all errors into the retry queue, which
+// immediately boomed the AliCloud rate limit.
+// See more details of a similar issue in AWS controller:
+// https://github.com/crossplane-contrib/provider-aws/issues/69
+func CleanError(err error) error {
+	if err == nil {
+		return err
+	}
+
+	if aliCloudErr, ok := err.(*sdkerrors.ServerError); ok {
+		cleanedErr := CleanedServerError{
+			HttpStatus: aliCloudErr.HttpStatus(),
+			HostId:     aliCloudErr.HostId(),
+			Code:       aliCloudErr.ErrorCode(),
+			Message:    aliCloudErr.Message(),
+			Comment:    aliCloudErr.Comment(),
+		}
+		strData, err := json.Marshal(cleanedErr)
+		if err != nil {
+			return errors.Wrap(err, "Failed to marshal cleaned error from AliCloud SDK Error.")
+		}
+		return sdkerrors.NewServerError(aliCloudErr.HttpStatus(), string(strData), aliCloudErr.Comment())
+	}
+
 	return err
 }
