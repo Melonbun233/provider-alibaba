@@ -59,11 +59,11 @@ type RedisInstanceSpec struct {
 // Redis instance states.
 const (
 	// The instance is healthy and available
-	RedisInstanceStateRunning = "Ready"
+	RedisInstanceStateRunning = "Normal"
 	// The instance is being created. The instance is inaccessible while it is being created.
 	RedisInstanceStateCreating = "Creating"
 	// The instance is being deleted.
-	RedisInstanceStateDeleting = "Deleting"
+	RedisInstanceStateDeleting = "Flushing"
 )
 
 // RedisInstanceStatus defines the observed state of RedisInstance

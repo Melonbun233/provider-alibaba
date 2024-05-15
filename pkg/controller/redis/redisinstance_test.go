@@ -285,7 +285,7 @@ func TestObserve(t *testing.T) {
 				Spec: v1alpha1.RedisInstanceSpec{
 					ForProvider: v1alpha1.RedisInstanceParameters{
 						MasterUsername: testName,
-						InstancePort:   1234,
+						Port:           1234,
 					},
 				},
 				Status: v1alpha1.RedisInstanceStatus{
@@ -302,9 +302,9 @@ func TestObserve(t *testing.T) {
 			mg: &v1alpha1.RedisInstance{
 				Spec: v1alpha1.RedisInstanceSpec{
 					ForProvider: v1alpha1.RedisInstanceParameters{
-						MasterUsername:     testName,
-						PubliclyAccessible: true,
-						InstancePort:       123,
+						MasterUsername: testName,
+						// PubliclyAccessible: true,
+						Port: 123,
 					},
 				},
 				Status: v1alpha1.RedisInstanceStatus{
@@ -373,11 +373,11 @@ func TestCreate(t *testing.T) {
 				},
 				Spec: v1alpha1.RedisInstanceSpec{
 					ForProvider: v1alpha1.RedisInstanceParameters{
-						MasterUsername:     testName,
-						EngineVersion:      "5.0",
-						InstanceClass:      "redis.logic.sharding.2g.8db.0rodb.8proxy.default",
-						InstancePort:       8080,
-						PubliclyAccessible: true,
+						MasterUsername: testName,
+						EngineVersion:  "5.0",
+						InstanceClass:  "redis.logic.sharding.2g.8db.0rodb.8proxy.default",
+						Port:           8080,
+						// PubliclyAccessible: true,
 					},
 				},
 			},
@@ -636,8 +636,8 @@ func (c *fakeRedisClient) DescribeDBInstance(id string) (*redis.DBInstance, erro
 	}, nil
 }
 
-func (c *fakeRedisClient) CreateDBInstance(req *redis.CreateRedisInstanceRequest) (*redis.DBInstance, error) {
-	if req.Name != testName {
+func (c *fakeRedisClient) CreateDBInstance(instanceName string, p *v1alpha1.RedisInstanceParameters) (*redis.DBInstance, error) {
+	if instanceName != testName {
 		return nil, errors.New("CreateRedisInstance: client doesn't work")
 	}
 	return &redis.DBInstance{

@@ -188,22 +188,23 @@ func (e *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 }
 
 func (e *external) createConnectionIfNeeded(cr *v1alpha1.RedisInstance) (string, string, error) {
-	if cr.Spec.ForProvider.PubliclyAccessible {
-		return e.createPublicConnectionIfNeeded(cr)
-	}
+	// Henry: No need to support for public access
+	// if cr.Spec.ForProvider.PubliclyAccessible {
+	// 	return e.createPublicConnectionIfNeeded(cr)
+	// }
 	return e.createPrivateConnectionIfNeeded(cr)
 }
 
 func (e *external) createPrivateConnectionIfNeeded(cr *v1alpha1.RedisInstance) (string, string, error) {
 	domain := cr.Status.AtProvider.DBInstanceID + ".redis.rds.aliyuncs.com"
-	if cr.Spec.ForProvider.InstancePort == 0 {
+	if cr.Spec.ForProvider.Port == 0 {
 		return domain, defaultRedisPort, nil
 	}
-	port := strconv.Itoa(cr.Spec.ForProvider.InstancePort)
+	port := strconv.Itoa(cr.Spec.ForProvider.Port)
 	if cr.Status.AtProvider.ConnectionReady {
 		return domain, port, nil
 	}
-	connectionDomain, err := e.client.ModifyDBInstanceConnectionString(cr.Status.AtProvider.DBInstanceID, cr.Spec.ForProvider.InstancePort)
+	connectionDomain, err := e.client.ModifyDBInstanceConnectionString(cr.Status.AtProvider.DBInstanceID, cr.Spec.ForProvider.Port)
 	if err != nil {
 		// The previous request might fail due to timeout. That's fine we will eventually reconcile it.
 		var sdkerr sdkerror.Error
@@ -220,31 +221,31 @@ func (e *external) createPrivateConnectionIfNeeded(cr *v1alpha1.RedisInstance) (
 	return connectionDomain, port, nil
 }
 
-func (e *external) createPublicConnectionIfNeeded(cr *v1alpha1.RedisInstance) (string, string, error) {
-	domain := cr.Status.AtProvider.DBInstanceID + redis.PubilConnectionDomain
-	if cr.Status.AtProvider.ConnectionReady {
-		return domain, "", nil
-	}
-	port := defaultRedisPort
-	if cr.Spec.ForProvider.InstancePort != 0 {
-		port = strconv.Itoa(cr.Spec.ForProvider.InstancePort)
-	}
-	_, err := e.client.AllocateInstancePublicConnection(cr.Status.AtProvider.DBInstanceID, cr.Spec.ForProvider.InstancePort)
-	if err != nil {
-		// The previous request might fail due to timeout. That's fine we will eventually reconcile it.
-		var sdkerr sdkerror.Error
-		if errors.As(err, &sdkerr) {
-			if sdkerr.ErrorCode() == errDuplicateConnectionPort || sdkerr.ErrorCode() == "NetTypeExists" {
-				cr.Status.AtProvider.ConnectionReady = true
-				return domain, port, nil
-			}
-		}
-		return "", "", err
-	}
+// func (e *external) createPublicConnectionIfNeeded(cr *v1alpha1.RedisInstance) (string, string, error) {
+// 	domain := cr.Status.AtProvider.DBInstanceID + redis.PubilConnectionDomain
+// 	if cr.Status.AtProvider.ConnectionReady {
+// 		return domain, "", nil
+// 	}
+// 	port := defaultRedisPort
+// 	if cr.Spec.ForProvider.InstancePort != 0 {
+// 		port = strconv.Itoa(cr.Spec.ForProvider.InstancePort)
+// 	}
+// 	_, err := e.client.AllocateInstancePublicConnection(cr.Status.AtProvider.DBInstanceID, cr.Spec.ForProvider.InstancePort)
+// 	if err != nil {
+// 		// The previous request might fail due to timeout. That's fine we will eventually reconcile it.
+// 		var sdkerr sdkerror.Error
+// 		if errors.As(err, &sdkerr) {
+// 			if sdkerr.ErrorCode() == errDuplicateConnectionPort || sdkerr.ErrorCode() == "NetTypeExists" {
+// 				cr.Status.AtProvider.ConnectionReady = true
+// 				return domain, port, nil
+// 			}
+// 		}
+// 		return "", "", err
+// 	}
 
-	cr.Status.AtProvider.ConnectionReady = true
-	return domain, port, nil
-}
+// 	cr.Status.AtProvider.ConnectionReady = true
+// 	return domain, port, nil
+// }
 
 func (e *external) createAccountIfNeeded(cr *v1alpha1.RedisInstance) (string, error) {
 	if cr.Status.AtProvider.AccountReady {
@@ -288,8 +289,7 @@ func (e *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalCreation{}, nil
 	}
 
-	req := redis.MakeCreateDBInstanceRequest(meta.GetExternalName(cr), &cr.Spec.ForProvider)
-	instance, err := e.client.CreateDBInstance(req)
+	instance, err := e.client.CreateDBInstance(meta.GetExternalName(cr), &cr.Spec.ForProvider)
 	if err != nil {
 		return managed.ExternalCreation{}, errors.Wrap(err, errCreateFailed)
 	}

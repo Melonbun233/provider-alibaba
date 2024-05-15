@@ -25,6 +25,7 @@ import (
 	"github.com/pkg/errors"
 
 	sdkerrors "github.com/aliyun/alibaba-cloud-sdk-go/sdk/errors"
+	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/requests"
 	aliredis "github.com/aliyun/alibaba-cloud-sdk-go/services/r-kvstore"
 
 	"github.com/crossplane-contrib/provider-alibaba/apis/redis/v1alpha1"
@@ -43,7 +44,7 @@ const (
 	// HTTPSScheme indicates request scheme
 	HTTPSScheme = "https"
 	// VPCNetworkType indicates network type by vpc
-	VPCNetworkType = "VPC"
+	// VPCNetworkType = "VPC"
 )
 
 // Same server error but without requestID
@@ -59,7 +60,7 @@ type CleanedServerError struct {
 type Client interface {
 	DescribeDBInstance(id string) (*DBInstance, error)
 	CreateAccount(id, username, password string) error
-	CreateDBInstance(*CreateRedisInstanceRequest) (*DBInstance, error)
+	CreateDBInstance(externalName string, parameters *v1alpha1.RedisInstanceParameters) (*DBInstance, error)
 	DeleteDBInstance(id string) error
 	AllocateInstancePublicConnection(id string, port int) (string, error)
 	ModifyDBInstanceConnectionString(id string, port int) (string, error)
@@ -76,21 +77,6 @@ type DBInstance struct {
 
 	// Endpoint specifies the connection endpoint.
 	Endpoint *v1alpha1.Endpoint
-}
-
-// CreateRedisInstanceRequest defines the request info to create DB Instance
-type CreateRedisInstanceRequest struct {
-	Name           string
-	InstanceType   string
-	EngineVersion  string
-	SecurityIPList string
-	InstanceClass  string
-	Password       string
-	ChargeType     string
-	Port           int
-	NetworkType    string
-	VpcID          string
-	VSwitchID      string
 }
 
 // ModifyRedisInstanceRequest defines the request info to modify DB Instance
@@ -134,22 +120,31 @@ func (c *client) DescribeDBInstance(id string) (*DBInstance, error) {
 	return in, nil
 }
 
-func (c *client) CreateDBInstance(req *CreateRedisInstanceRequest) (*DBInstance, error) {
+func (c *client) CreateDBInstance(externalName string, p *v1alpha1.RedisInstanceParameters) (*DBInstance, error) {
 	request := aliredis.CreateCreateInstanceRequest()
+
 	request.Scheme = HTTPSScheme
 
-	request.InstanceName = req.Name
-	request.EngineVersion = req.EngineVersion
-	request.InstanceClass = req.InstanceClass
-	request.InstanceType = req.InstanceType
-	request.ReadTimeout = DefaultReadTime
-	request.ChargeType = req.ChargeType
-	request.NetworkType = req.NetworkType
+	request.InstanceName = externalName
+	// request.RegionID = p.RegionID
+	request.ZoneId = p.ZoneID
+	request.SecondaryZoneId = p.SecondaryZoneID
+	request.VpcId = p.VpcID
+	request.VSwitchId = p.VSwitchID
+	request.ChargeType = p.ChargeType
+	request.NetworkType = p.NetworkType
+	request.InstanceType = p.InstanceType
+	request.InstanceClass = p.InstanceClass
+	request.Port = strconv.Itoa(p.Port)
+	request.EngineVersion = p.EngineVersion
+	request.ShardCount = requests.NewInteger(p.ShardCount)
 
-	if req.NetworkType == VPCNetworkType {
-		request.VpcId = req.VpcID
-		request.VSwitchId = req.VSwitchID
+	requestTags := make([]aliredis.CreateInstanceTag, len(p.Tag))
+	for _, tag := range p.Tag {
+		requestTags = append(requestTags, aliredis.CreateInstanceTag{Key: tag.Key, Value: tag.Value})
 	}
+	request.Tag = &requestTags
+
 	resp, err := c.redisCli.CreateInstance(request)
 	if err != nil {
 		return nil, CleanError(err)
@@ -192,21 +187,6 @@ func GenerateObservation(db *DBInstance) v1alpha1.RedisInstanceObservation {
 	return v1alpha1.RedisInstanceObservation{
 		DBInstanceStatus: db.Status,
 		DBInstanceID:     db.ID,
-	}
-}
-
-// MakeCreateDBInstanceRequest generates CreateDBInstanceRequest
-func MakeCreateDBInstanceRequest(name string, p *v1alpha1.RedisInstanceParameters) *CreateRedisInstanceRequest {
-	return &CreateRedisInstanceRequest{
-		Name:          name,
-		InstanceType:  p.InstanceType,
-		EngineVersion: p.EngineVersion,
-		InstanceClass: p.InstanceClass,
-		Port:          p.InstancePort,
-		NetworkType:   p.NetworkType,
-		VpcID:         p.VpcID,
-		VSwitchID:     p.VSwitchID,
-		ChargeType:    p.ChargeType,
 	}
 }
 
