@@ -69,13 +69,15 @@ spec:
                     description: ChargeType is indicates payment type ChargeType：PrePaid/PostPaid
                     type: string
                   engineVersion:
-                    description: EngineVersion indicates the database engine version. Redis：4.0/5.0
+                    description: EngineVersion indicates the database engine version.
                     enum:
                     - "4.0"
                     - "5.0"
+                    - "6.0"
+                    - "7.0"
                     type: string
                   instanceClass:
-                    description: InstanceClass is the machine class of the instance, e.g. "redis.logic.sharding.2g.8db.0rodb.8proxy.default"
+                    description: The instance type. For example, redis.master.small.default indicates a Community Edition standard master-replica instance that has 1 GB of memory.
                     type: string
                   instanceType:
                     description: Engine is the name of the database engine to be used for this instance. Engine is a required field.
@@ -86,26 +88,49 @@ spec:
                     description: 'MasterUsername is the name for the master user. Constraints:    * Required for Redis.    * Must be 1 to 16 letters or numbers.    * First character must be a letter.    * Cannot be a reserved word for the chosen database engine.'
                     type: string
                   networkType:
-                    default: CLASSIC
+                    default: VPC
                     description: NetworkType is indicates service network type NetworkType：CLASSIC/VPC
                     type: string
                   port:
-                    description: InstancePort is indicates the database service port
+                    description: Port is indicates the database service port
                     type: integer
-                  publiclyAccessible:
-                    description: PubliclyAccessible is Public network of service exposure
-                    type: boolean
+                  regionId:
+                    description: The ID of the region where you want to create the instance.
+                    type: string
+                  secondaryZoneId:
+                    description: The secondary zone ID of the instance. The master node and replica node of the instance can be deployed in different zones and disaster recovery is implemented across zones.
+                    type: string
+                  shardCount:
+                    description: The number of data shards. This parameter is available only if you create a cluster instance that uses cloud disks.
+                    type: integer
+                  tag:
+                    description: The tags of the instance.
+                    items:
+                      description: A Tag is used to tag the Redis resources in AliCloud.
+                      properties:
+                        key:
+                          description: Key for the tag.
+                          type: string
+                        value:
+                          description: Value of the tag.
+                          type: string
+                      required:
+                      - key
+                      type: object
+                    type: array
                   vSwitchId:
                     description: VSwitchId is indicates VSwitch ID
                     type: string
                   vpcId:
-                    description: VpcId is indicates VPC ID
+                    description: The ID of the virtual private cloud (VPC).
+                    type: string
+                  zoneId:
+                    description: The primary zone ID of the instance.
                     type: string
                 required:
-                - engineVersion
                 - instanceClass
                 - instanceType
-                - publiclyAccessible
+                - shardCount
                 type: object
               providerConfigRef:
                 description: ProviderConfigReference specifies how the provider that will be used to create, observe, update, and delete this managed resource should be configured.

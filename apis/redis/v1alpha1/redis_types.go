@@ -59,11 +59,11 @@ type RedisInstanceSpec struct {
 // Redis instance states.
 const (
 	// The instance is healthy and available
-	RedisInstanceStateRunning = "Normal"
+	RedisInstanceStateRunning = "Ready"
 	// The instance is being created. The instance is inaccessible while it is being created.
 	RedisInstanceStateCreating = "Creating"
 	// The instance is being deleted.
-	RedisInstanceStateDeleting = "Flushing"
+	RedisInstanceStateDeleting = "Deleting"
 )
 
 // RedisInstanceStatus defines the observed state of RedisInstance
@@ -72,33 +72,81 @@ type RedisInstanceStatus struct {
 	AtProvider          RedisInstanceObservation `json:"atProvider,omitempty"`
 }
 
+// A Tag is used to tag the Redis resources in AliCloud.
+type Tag struct {
+	// Key for the tag.
+	Key string `json:"key"`
+
+	// Value of the tag.
+	// +optional
+	Value string `json:"value,omitempty"`
+}
+
 // RedisInstanceParameters define the desired state of an Redis instance.
 type RedisInstanceParameters struct {
-	// Engine is the name of the database engine to be used for this instance.
-	// Engine is a required field.
+	// The ID of the region where you want to create the instance.
 	// +immutable
-	// +kubebuilder:validation:Enum=Redis
-	InstanceType string `json:"instanceType"`
-	// EngineVersion indicates the database engine version.
-	// Redis：4.0/5.0
-	// +kubebuilder:validation:Enum="4.0";"5.0"
-	EngineVersion string `json:"engineVersion"`
-
-	// InstanceClass is the machine class of the instance, e.g. "redis.logic.sharding.2g.8db.0rodb.8proxy.default"
-	InstanceClass string `json:"instanceClass"`
-
-	// InstancePort is indicates the database service port
 	// +optional
-	InstancePort int `json:"port"`
+	RegionID string `json:"regionId,omitempty"`
 
-	// PubliclyAccessible is Public network of service exposure
-	PubliclyAccessible bool `json:"publiclyAccessible"`
+	// The primary zone ID of the instance.
+	// +optional
+	ZoneID string `json:"zoneId,omitempty"`
+
+	// The secondary zone ID of the instance.
+	// The master node and replica node of the instance can be deployed in different zones and disaster recovery is implemented across zones.
+	// +optional
+	SecondaryZoneID string `json:"secondaryZoneId,omitempty"`
+
+	// The ID of the virtual private cloud (VPC).
+	// +immutable
+	// +optional
+	VpcID string `json:"vpcId,omitempty"`
+
+	// VSwitchId is indicates VSwitch ID
+	// +immutable
+	// +optional
+	VSwitchID string `json:"vSwitchId,omitempty"`
 
 	// ChargeType is indicates payment type
 	// ChargeType：PrePaid/PostPaid
 	// +optional
 	// +kubebuilder:default="PostPaid"
 	ChargeType string `json:"chargeType"`
+
+	// NetworkType is indicates service network type
+	// NetworkType：CLASSIC/VPC
+	// +optional
+	// +immutable
+	// +kubebuilder:default="VPC"
+	NetworkType string `json:"networkType"`
+
+	// Engine is the name of the database engine to be used for this instance.
+	// Engine is a required field.
+	// +immutable
+	// +kubebuilder:validation:Enum=Redis
+	InstanceType string `json:"instanceType"`
+
+	// The instance type.
+	// For example, redis.master.small.default indicates a Community Edition
+	// standard master-replica instance that has 1 GB of memory.
+	InstanceClass string `json:"instanceClass"`
+
+	// Port is indicates the database service port
+	// +optional
+	Port int `json:"port,omitempty"`
+
+	// EngineVersion indicates the database engine version.
+	// +kubebuilder:validation:Enum="4.0";"5.0";"6.0";"7.0"
+	EngineVersion string `json:"engineVersion,omitempty"`
+
+	// The number of data shards.
+	// This parameter is available only if you create a cluster instance that uses cloud disks.
+	ShardCount int `json:"shardCount"`
+
+	// The tags of the instance.
+	// +optional
+	Tag []Tag `json:"tag,omitempty"`
 
 	// MasterUsername is the name for the master user.
 	// Constraints:
@@ -109,20 +157,6 @@ type RedisInstanceParameters struct {
 	// +immutable
 	// +optional
 	MasterUsername string `json:"masterUsername"`
-
-	// NetworkType is indicates service network type
-	// NetworkType：CLASSIC/VPC
-	// +optional
-	// +kubebuilder:default="CLASSIC"
-	NetworkType string `json:"networkType"`
-
-	// VpcId is indicates VPC ID
-	// +optional
-	VpcID string `json:"vpcId"`
-
-	// VSwitchId is indicates VSwitch ID
-	// +optional
-	VSwitchID string `json:"vSwitchId"`
 }
 
 // RedisInstanceObservation is the representation of the current state that is observed.
