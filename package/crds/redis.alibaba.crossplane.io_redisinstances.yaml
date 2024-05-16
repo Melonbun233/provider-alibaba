@@ -184,10 +184,21 @@ spec:
                   dbInstanceStatus:
                     description: DBInstanceStatus specifies the current state of this database.
                     type: string
+                  endpoint:
+                    description: Endpoint contains address and port used to connect with the Redis instance
+                    properties:
+                      address:
+                        description: Address specifies the DNS address of the Redis instance.
+                        type: string
+                      port:
+                        description: Port specifies the port that the database engine is listening on.
+                        type: string
+                    type: object
                 required:
                 - accountReady
                 - connectionReady
                 - dbInstanceID
+                - endpoint
                 type: object
               conditions:
                 description: Conditions of the resource.

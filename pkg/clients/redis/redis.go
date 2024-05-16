@@ -40,7 +40,7 @@ const (
 	// DefaultReadTime indicates default connect timeout number
 	DefaultReadTime = 60 * time.Second
 	// PubilConnectionDomain indicates instances connect domain
-	PubilConnectionDomain = "-pb.redis.rds.aliyuncs.com"
+	// PubilConnectionDomain = "-pb.redis.rds.aliyuncs.com"
 	// HTTPSScheme indicates request scheme
 	HTTPSScheme = "https"
 	// VPCNetworkType indicates network type by vpc
@@ -62,8 +62,8 @@ type Client interface {
 	CreateAccount(id, username, password string) error
 	CreateDBInstance(externalName string, parameters *v1alpha1.RedisInstanceParameters) (*DBInstance, error)
 	DeleteDBInstance(id string) error
-	AllocateInstancePublicConnection(id string, port int) (string, error)
-	ModifyDBInstanceConnectionString(id string, port int) (string, error)
+	// AllocateInstancePublicConnection(id string, port int) (string, error)
+	// ModifyDBInstanceConnectionString(id string, port int) (string, error)
 	Update(id string, req *ModifyRedisInstanceRequest) error
 }
 
@@ -115,6 +115,10 @@ func (c *client) DescribeDBInstance(id string) (*DBInstance, error) {
 	in := &DBInstance{
 		ID:     rsp.InstanceId,
 		Status: rsp.InstanceStatus,
+		Endpoint: &v1alpha1.Endpoint{
+			Address: rsp.ConnectionDomain,
+			Port:    strconv.FormatInt(rsp.Port, 10),
+		},
 	}
 
 	return in, nil
@@ -187,6 +191,10 @@ func GenerateObservation(db *DBInstance) v1alpha1.RedisInstanceObservation {
 	return v1alpha1.RedisInstanceObservation{
 		DBInstanceStatus: db.Status,
 		DBInstanceID:     db.ID,
+		Endpoint: v1alpha1.Endpoint{
+			Address: db.Endpoint.Address,
+			Port:    db.Endpoint.Port,
+		},
 	}
 }
 
@@ -204,33 +212,33 @@ func IsErrorNotFound(err error) bool {
 	return srverr.ErrorCode() == "InvalidInstanceId.NotFound"
 }
 
-func (c *client) AllocateInstancePublicConnection(id string, port int) (string, error) {
-	request := aliredis.CreateAllocateInstancePublicConnectionRequest()
-	request.Scheme = HTTPSScheme
-	request.InstanceId = id
-	request.ConnectionStringPrefix = id + PubilConnectionDomain
-	request.Port = strconv.Itoa(port)
-	request.ReadTimeout = DefaultReadTime
-	_, err := c.redisCli.AllocateInstancePublicConnection(request)
-	if err != nil {
-		return "", CleanError(err)
-	}
-	return request.ConnectionStringPrefix, err
-}
+// func (c *client) AllocateInstancePublicConnection(id string, port int) (string, error) {
+// 	request := aliredis.CreateAllocateInstancePublicConnectionRequest()
+// 	request.Scheme = HTTPSScheme
+// 	request.InstanceId = id
+// 	request.ConnectionStringPrefix = id + PubilConnectionDomain
+// 	request.Port = strconv.Itoa(port)
+// 	request.ReadTimeout = DefaultReadTime
+// 	_, err := c.redisCli.AllocateInstancePublicConnection(request)
+// 	if err != nil {
+// 		return "", CleanError(err)
+// 	}
+// 	return request.ConnectionStringPrefix, err
+// }
 
-func (c *client) ModifyDBInstanceConnectionString(id string, port int) (string, error) {
-	request := aliredis.CreateModifyDBInstanceConnectionStringRequest()
-	request.Scheme = HTTPSScheme
-	request.DBInstanceId = id
-	request.CurrentConnectionString = id + PubilConnectionDomain
-	request.Port = strconv.Itoa(port)
-	request.ReadTimeout = DefaultReadTime
-	_, err := c.redisCli.ModifyDBInstanceConnectionString(request)
-	if err != nil {
-		return "", CleanError(err)
-	}
-	return request.CurrentConnectionString, err
-}
+// func (c *client) ModifyDBInstanceConnectionString(id string, port int) (string, error) {
+// 	request := aliredis.CreateModifyDBInstanceConnectionStringRequest()
+// 	request.Scheme = HTTPSScheme
+// 	request.DBInstanceId = id
+// 	request.CurrentConnectionString = id + PubilConnectionDomain
+// 	request.Port = strconv.Itoa(port)
+// 	request.ReadTimeout = DefaultReadTime
+// 	_, err := c.redisCli.ModifyDBInstanceConnectionString(request)
+// 	if err != nil {
+// 		return "", CleanError(err)
+// 	}
+// 	return request.CurrentConnectionString, err
+// }
 
 func (c *client) Update(id string, req *ModifyRedisInstanceRequest) error {
 	if req.InstanceClass == "" {

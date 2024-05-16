@@ -19,7 +19,6 @@ package redis
 import (
 	"context"
 	"fmt"
-	"strconv"
 
 	sdkerror "github.com/aliyun/alibaba-cloud-sdk-go/sdk/errors"
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
@@ -159,14 +158,9 @@ func (e *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	switch cr.Status.AtProvider.DBInstanceStatus {
 	case v1alpha1.RedisInstanceStateRunning:
 		cr.Status.SetConditions(xpv1.Available())
-		address, port, err := e.createConnectionIfNeeded(cr)
-		if err != nil {
-			return managed.ExternalObservation{}, errors.Wrap(err, errCreateInstanceConnectionFailed)
-		}
-		instance.Endpoint = &v1alpha1.Endpoint{
-			Address: address,
-			Port:    port,
-		}
+
+		// TODO: Support update connection port
+		cr.Status.AtProvider.ConnectionReady = true
 
 		pw, err = e.createAccountIfNeeded(cr)
 		if err != nil {
@@ -187,39 +181,41 @@ func (e *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	}, nil
 }
 
-func (e *external) createConnectionIfNeeded(cr *v1alpha1.RedisInstance) (string, string, error) {
-	// Henry: No need to support for public access
-	// if cr.Spec.ForProvider.PubliclyAccessible {
-	// 	return e.createPublicConnectionIfNeeded(cr)
-	// }
-	return e.createPrivateConnectionIfNeeded(cr)
-}
+// Henry: No need to support for public access
+// We don't need to call this method as the port and address are automatically configured now
+// func (e *external) createConnectionIfNeeded(cr *v1alpha1.RedisInstance) (string, string, error) {
 
-func (e *external) createPrivateConnectionIfNeeded(cr *v1alpha1.RedisInstance) (string, string, error) {
-	domain := cr.Status.AtProvider.DBInstanceID + ".redis.rds.aliyuncs.com"
-	if cr.Spec.ForProvider.Port == 0 {
-		return domain, defaultRedisPort, nil
-	}
-	port := strconv.Itoa(cr.Spec.ForProvider.Port)
-	if cr.Status.AtProvider.ConnectionReady {
-		return domain, port, nil
-	}
-	connectionDomain, err := e.client.ModifyDBInstanceConnectionString(cr.Status.AtProvider.DBInstanceID, cr.Spec.ForProvider.Port)
-	if err != nil {
-		// The previous request might fail due to timeout. That's fine we will eventually reconcile it.
-		var sdkerr sdkerror.Error
-		if errors.As(err, &sdkerr) {
-			if sdkerr.ErrorCode() == errDuplicateConnectionPort {
-				cr.Status.AtProvider.ConnectionReady = true
-				return domain, port, nil
-			}
-		}
-		return "", "", err
-	}
+// 	if cr.Spec.ForProvider.PubliclyAccessible {
+// 		return e.createPublicConnectionIfNeeded(cr)
+// 	}
+// 	return e.createPrivateConnectionIfNeeded(cr)
+// }
 
-	cr.Status.AtProvider.ConnectionReady = true
-	return connectionDomain, port, nil
-}
+// func (e *external) createPrivateConnectionIfNeeded(cr *v1alpha1.RedisInstance) (string, string, error) {
+// 	domain := cr.Status.AtProvider.DBInstanceID + ".redis.rds.aliyuncs.com"
+// 	if cr.Spec.ForProvider.Port == 0 {
+// 		return domain, defaultRedisPort, nil
+// 	}
+// 	port := strconv.Itoa(cr.Spec.ForProvider.Port)
+// 	if cr.Status.AtProvider.ConnectionReady {
+// 		return domain, port, nil
+// 	}
+// 	connectionDomain, err := e.client.ModifyDBInstanceConnectionString(cr.Status.AtProvider.DBInstanceID, cr.Spec.ForProvider.Port)
+// 	if err != nil {
+// 		// The previous request might fail due to timeout. That's fine we will eventually reconcile it.
+// 		var sdkerr sdkerror.Error
+// 		if errors.As(err, &sdkerr) {
+// 			if sdkerr.ErrorCode() == errDuplicateConnectionPort {
+// 				cr.Status.AtProvider.ConnectionReady = true
+// 				return domain, port, nil
+// 			}
+// 		}
+// 		return "", "", err
+// 	}
+
+// 	cr.Status.AtProvider.ConnectionReady = true
+// 	return connectionDomain, port, nil
+// }
 
 // func (e *external) createPublicConnectionIfNeeded(cr *v1alpha1.RedisInstance) (string, string, error) {
 // 	domain := cr.Status.AtProvider.DBInstanceID + redis.PubilConnectionDomain

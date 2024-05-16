@@ -172,6 +172,9 @@ type RedisInstanceObservation struct {
 
 	// ConnectionReady specifies whether the network connect is ready
 	ConnectionReady bool `json:"connectionReady"`
+
+	// Endpoint contains address and port used to connect with the Redis instance
+	Endpoint Endpoint `json:"endpoint"`
 }
 
 // Endpoint is the redis endpoint
