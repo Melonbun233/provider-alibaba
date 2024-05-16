@@ -86,26 +86,21 @@ type Tag struct {
 type RedisInstanceParameters struct {
 	// The ID of the region where you want to create the instance.
 	// +immutable
-	// +optional
 	RegionID string `json:"regionId,omitempty"`
 
 	// The primary zone ID of the instance.
-	// +optional
 	ZoneID string `json:"zoneId,omitempty"`
 
 	// The secondary zone ID of the instance.
 	// The master node and replica node of the instance can be deployed in different zones and disaster recovery is implemented across zones.
-	// +optional
 	SecondaryZoneID string `json:"secondaryZoneId,omitempty"`
 
 	// The ID of the virtual private cloud (VPC).
 	// +immutable
-	// +optional
 	VpcID string `json:"vpcId,omitempty"`
 
 	// VSwitchId is indicates VSwitch ID
 	// +immutable
-	// +optional
 	VSwitchID string `json:"vSwitchId,omitempty"`
 
 	// ChargeType is indicates payment type
@@ -134,6 +129,7 @@ type RedisInstanceParameters struct {
 
 	// Port is indicates the database service port
 	// +optional
+	// +kubebuilder:default=6379
 	Port int `json:"port,omitempty"`
 
 	// EngineVersion indicates the database engine version.

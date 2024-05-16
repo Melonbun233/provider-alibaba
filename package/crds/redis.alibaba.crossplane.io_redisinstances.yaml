@@ -92,6 +92,7 @@ spec:
                     description: NetworkType is indicates service network type NetworkType：CLASSIC/VPC
                     type: string
                   port:
+                    default: 6379
                     description: Port is indicates the database service port
                     type: integer
                   regionId:
