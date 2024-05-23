@@ -21,7 +21,10 @@ import (
 	"github.com/crossplane-contrib/provider-alibaba/pkg/clients/redis"
 )
 
-const testName = "test"
+const testName = "testName"
+const testStatus = "testEndpoint"
+
+var testEndpoint = v1alpha1.Endpoint{Address: "test-address", Port: "test-port"}
 
 func TestConnector(t *testing.T) {
 	errBoom := errors.New("boom")
@@ -266,13 +269,13 @@ func TestObserve(t *testing.T) {
 		"InstancePort is not set": {
 			mg: &v1alpha1.RedisInstance{
 				Spec: v1alpha1.RedisInstanceSpec{
-					ForProvider: v1alpha1.RedisInstanceParameters{
-						MasterUsername: testName,
-					},
+					ForProvider: v1alpha1.RedisInstanceParameters{},
 				},
 				Status: v1alpha1.RedisInstanceStatus{
 					AtProvider: v1alpha1.RedisInstanceObservation{
-						DBInstanceID: testName,
+						DBInstanceID:     testName,
+						DBInstanceStatus: testStatus,
+						Endpoint:         testEndpoint,
 					},
 				},
 			},
@@ -284,32 +287,14 @@ func TestObserve(t *testing.T) {
 			mg: &v1alpha1.RedisInstance{
 				Spec: v1alpha1.RedisInstanceSpec{
 					ForProvider: v1alpha1.RedisInstanceParameters{
-						MasterUsername: testName,
-						Port:           1234,
+						Port: "1234",
 					},
 				},
 				Status: v1alpha1.RedisInstanceStatus{
 					AtProvider: v1alpha1.RedisInstanceObservation{
-						DBInstanceID: testName,
-					},
-				},
-			},
-			want: want{
-				ResourceExists: true, ResourceUpToDate: true, err: nil,
-			},
-		},
-		"PubliclyAccessible is set": {
-			mg: &v1alpha1.RedisInstance{
-				Spec: v1alpha1.RedisInstanceSpec{
-					ForProvider: v1alpha1.RedisInstanceParameters{
-						MasterUsername: testName,
-						// PubliclyAccessible: true,
-						Port: 123,
-					},
-				},
-				Status: v1alpha1.RedisInstanceStatus{
-					AtProvider: v1alpha1.RedisInstanceObservation{
-						DBInstanceID: testName,
+						DBInstanceID:     testName,
+						DBInstanceStatus: testStatus,
+						Endpoint:         testEndpoint,
 					},
 				},
 			},
@@ -357,6 +342,8 @@ func TestCreate(t *testing.T) {
 				Status: v1alpha1.RedisInstanceStatus{
 					AtProvider: v1alpha1.RedisInstanceObservation{
 						DBInstanceStatus: v1alpha1.RedisInstanceStateCreating,
+						DBInstanceID:     testName,
+						Endpoint:         testEndpoint,
 					},
 				},
 			},
@@ -373,10 +360,9 @@ func TestCreate(t *testing.T) {
 				},
 				Spec: v1alpha1.RedisInstanceSpec{
 					ForProvider: v1alpha1.RedisInstanceParameters{
-						MasterUsername: testName,
-						EngineVersion:  "5.0",
-						InstanceClass:  "redis.logic.sharding.2g.8db.0rodb.8proxy.default",
-						Port:           8080,
+						EngineVersion: "5.0",
+						InstanceClass: "redis.logic.sharding.2g.8db.0rodb.8proxy.default",
+						Port:          "8080",
 						// PubliclyAccessible: true,
 					},
 				},
@@ -475,6 +461,8 @@ func TestDelete(t *testing.T) {
 				Status: v1alpha1.RedisInstanceStatus{
 					AtProvider: v1alpha1.RedisInstanceObservation{
 						DBInstanceStatus: v1alpha1.RedisInstanceStateDeleting,
+						DBInstanceID:     testName,
+						Endpoint:         testEndpoint,
 					},
 				},
 			},
@@ -489,7 +477,9 @@ func TestDelete(t *testing.T) {
 				},
 				Status: v1alpha1.RedisInstanceStatus{
 					AtProvider: v1alpha1.RedisInstanceObservation{
-						DBInstanceID: testName,
+						DBInstanceID:     testName,
+						DBInstanceStatus: testStatus,
+						Endpoint:         testEndpoint,
 					},
 				},
 			},
@@ -510,8 +500,8 @@ func TestDelete(t *testing.T) {
 }
 
 func TestGetConnectionDetails(t *testing.T) {
-	address := "0.0.0.0"
-	port := "3346"
+	address := testEndpoint.Address
+	port := testEndpoint.Port
 	password := "super-secret"
 
 	type args struct {
@@ -537,8 +527,11 @@ func TestGetConnectionDetails(t *testing.T) {
 						},
 					},
 					Spec: v1alpha1.RedisInstanceSpec{
-						ForProvider: v1alpha1.RedisInstanceParameters{
-							MasterUsername: testName,
+						ForProvider: v1alpha1.RedisInstanceParameters{},
+					},
+					Status: v1alpha1.RedisInstanceStatus{
+						AtProvider: v1alpha1.RedisInstanceObservation{
+							Endpoint: testEndpoint,
 						},
 					},
 				},
@@ -551,7 +544,6 @@ func TestGetConnectionDetails(t *testing.T) {
 			},
 			want: want{
 				conn: managed.ConnectionDetails{
-					xpv1.ResourceCredentialsSecretUserKey:     []byte(testName),
 					xpv1.ResourceCredentialsSecretEndpointKey: []byte(address),
 					xpv1.ResourceCredentialsSecretPortKey:     []byte(port),
 				},
@@ -567,8 +559,11 @@ func TestGetConnectionDetails(t *testing.T) {
 						},
 					},
 					Spec: v1alpha1.RedisInstanceSpec{
-						ForProvider: v1alpha1.RedisInstanceParameters{
-							MasterUsername: testName,
+						ForProvider: v1alpha1.RedisInstanceParameters{},
+					},
+					Status: v1alpha1.RedisInstanceStatus{
+						AtProvider: v1alpha1.RedisInstanceObservation{
+							DBInstanceID: testName,
 						},
 					},
 				},
@@ -591,8 +586,12 @@ func TestGetConnectionDetails(t *testing.T) {
 						},
 					},
 					Spec: v1alpha1.RedisInstanceSpec{
-						ForProvider: v1alpha1.RedisInstanceParameters{
-							MasterUsername: testName,
+						ForProvider: v1alpha1.RedisInstanceParameters{},
+					},
+					Status: v1alpha1.RedisInstanceStatus{
+						AtProvider: v1alpha1.RedisInstanceObservation{
+							DBInstanceID: testName,
+							Endpoint:     testEndpoint,
 						},
 					},
 				},
@@ -633,6 +632,10 @@ func (c *fakeRedisClient) DescribeDBInstance(id string) (*redis.DBInstance, erro
 	return &redis.DBInstance{
 		ID:     id,
 		Status: v1alpha1.RedisInstanceStateRunning,
+		Endpoint: &v1alpha1.Endpoint{
+			Address: "172.0.0.1",
+			Port:    "8888",
+		},
 	}, nil
 }
 

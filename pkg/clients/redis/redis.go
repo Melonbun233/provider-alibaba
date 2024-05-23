@@ -39,12 +39,9 @@ var (
 const (
 	// DefaultReadTime indicates default connect timeout number
 	DefaultReadTime = 60 * time.Second
-	// PubilConnectionDomain indicates instances connect domain
-	// PubilConnectionDomain = "-pb.redis.rds.aliyuncs.com"
+
 	// HTTPSScheme indicates request scheme
 	HTTPSScheme = "https"
-	// VPCNetworkType indicates network type by vpc
-	// VPCNetworkType = "VPC"
 )
 
 // Same server error but without requestID
@@ -129,19 +126,44 @@ func (c *client) CreateDBInstance(externalName string, p *v1alpha1.RedisInstance
 
 	request.Scheme = HTTPSScheme
 
-	request.InstanceName = externalName
+	// Seems regionID will be by default from the first part ZoneID
 	// request.RegionID = p.RegionID
+	request.Token = p.Token
+	request.InstanceName = externalName
+	request.Password = p.Password
+	request.Capacity = requests.Integer(p.Capacity)
+	request.InstanceClass = p.InstanceClass
 	request.ZoneId = p.ZoneID
-	request.SecondaryZoneId = p.SecondaryZoneID
+	request.ChargeType = p.ChargeType
+	request.NodeType = p.NodeType
+	request.NetworkType = p.NetworkType
 	request.VpcId = p.VpcID
 	request.VSwitchId = p.VSwitchID
-	request.ChargeType = p.ChargeType
-	request.NetworkType = p.NetworkType
+	request.Period = p.Period
+	request.BusinessInfo = p.BusinessInfo
+	request.CouponNo = p.CouponNo
+	request.SrcDBInstanceId = p.SrcDBInstanceId
+	request.BackupId = p.BackupId
 	request.InstanceType = p.InstanceType
-	request.InstanceClass = p.InstanceClass
-	request.Port = strconv.Itoa(p.Port)
 	request.EngineVersion = p.EngineVersion
+	request.PrivateIpAddress = p.PrivateIpAddress
+	request.AutoUseCoupon = p.AutoUseCoupon
+	request.AutoRenew = p.AutoRenew
+	request.AutoRenewPeriod = p.AutoRenewPeriod
+	request.ResourceGroupId = p.ResourceGroupId
+	request.RestoreTime = p.RestoreTime
+	request.DedicatedHostGroupId = p.DedicatedHostGroupId
 	request.ShardCount = requests.NewInteger(p.ShardCount)
+	request.ReadOnlyCount = requests.NewInteger(p.ReadOnlyCount)
+	request.GlobalInstanceId = p.GlobalInstanceId
+	request.GlobalInstance = requests.NewBoolean(p.GlobalInstance)
+	request.SecondaryZoneId = p.SecondaryZoneID
+	request.Port = p.Port
+	request.GlobalSecurityGroupIds = p.GlobalSecurityGroupIds
+	request.Appendonly = p.Appendonly
+	request.ConnectionStringPrefix = p.ConnectionStringPrefix
+	request.ParamGroupId = p.ParamGroupId
+	request.ClusterBackupId = p.ClusterBackupId
 
 	requestTags := make([]aliredis.CreateInstanceTag, len(p.Tag))
 	for _, tag := range p.Tag {

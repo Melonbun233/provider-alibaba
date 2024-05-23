@@ -10,7 +10,14 @@ import (
 )
 
 func TestGenerateObservation(t *testing.T) {
-	ob := GenerateObservation(&DBInstance{Status: v1alpha1.RedisInstanceStateRunning})
+	ob := GenerateObservation(&DBInstance{
+		Status: v1alpha1.RedisInstanceStateRunning,
+		ID:     "test-id",
+		Endpoint: &v1alpha1.Endpoint{
+			Address: "test-address",
+			Port:    "test-port",
+		},
+	})
 	if ob.DBInstanceStatus != v1alpha1.RedisInstanceStateRunning {
 		t.Errorf("RedisInstanceStatus: want=%v, get=%v", v1alpha1.RedisInstanceStateRunning, ob.DBInstanceStatus)
 	}

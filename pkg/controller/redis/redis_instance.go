@@ -162,7 +162,7 @@ func (e *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		// TODO: Support update connection port
 		cr.Status.AtProvider.ConnectionReady = true
 
-		pw, err = e.createAccountIfNeeded(cr)
+		pw, err = e.createAccount(cr)
 		if err != nil {
 			return managed.ExternalObservation{}, errors.Wrap(err, errCreateAccountFailed)
 		}
@@ -243,7 +243,7 @@ func (e *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 // 	return domain, port, nil
 // }
 
-func (e *external) createAccountIfNeeded(cr *v1alpha1.RedisInstance) (string, error) {
+func (e *external) createAccount(cr *v1alpha1.RedisInstance) (string, error) {
 	if cr.Status.AtProvider.AccountReady {
 		return "", nil
 	}
@@ -253,11 +253,8 @@ func (e *external) createAccountIfNeeded(cr *v1alpha1.RedisInstance) (string, er
 		return "", err
 	}
 
-	if cr.Spec.ForProvider.MasterUsername == "" {
-		return pw, nil
-	}
-
-	err = e.client.CreateAccount(cr.Status.AtProvider.DBInstanceID, cr.Spec.ForProvider.MasterUsername, pw)
+	// Use the instance id as the default user
+	err = e.client.CreateAccount(cr.Status.AtProvider.DBInstanceID, cr.Status.AtProvider.DBInstanceID, pw)
 	if err != nil {
 		// The previous request might fail due to timeout. That's fine we will eventually reconcile it.
 		var sdkerr sdkerror.Error
@@ -327,15 +324,16 @@ func (e *external) Delete(ctx context.Context, mg resource.Managed) error {
 }
 
 func getConnectionDetails(password string, cr *v1alpha1.RedisInstance, instance *redis.DBInstance) managed.ConnectionDetails {
-	cd := managed.ConnectionDetails{
-		xpv1.ResourceCredentialsSecretUserKey: []byte(instance.ID),
+	cd := managed.ConnectionDetails{}
+
+	if cr.Status.AtProvider.DBInstanceID != "" {
+		cd[xpv1.ResourceCredentialsSecretUserKey] = []byte(cr.Status.AtProvider.DBInstanceID)
 	}
-	if cr.Spec.ForProvider.MasterUsername != "" {
-		cd[xpv1.ResourceCredentialsSecretUserKey] = []byte(cr.Spec.ForProvider.MasterUsername)
-	}
+
 	if password != "" {
 		cd[xpv1.ResourceCredentialsSecretPasswordKey] = []byte(password)
 	}
+
 	if instance.Endpoint != nil {
 		cd[xpv1.ResourceCredentialsSecretEndpointKey] = []byte(instance.Endpoint.Address)
 		cd[xpv1.ResourceCredentialsSecretPortKey] = []byte(instance.Endpoint.Port)
