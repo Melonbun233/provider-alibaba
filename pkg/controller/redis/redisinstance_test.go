@@ -268,6 +268,9 @@ func TestObserve(t *testing.T) {
 	}{
 		"InstancePort is not set": {
 			mg: &v1alpha1.RedisInstance{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: testName,
+				},
 				Spec: v1alpha1.RedisInstanceSpec{
 					ForProvider: v1alpha1.RedisInstanceParameters{},
 				},
@@ -285,6 +288,9 @@ func TestObserve(t *testing.T) {
 		},
 		"InstancePort is set": {
 			mg: &v1alpha1.RedisInstance{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: testName,
+				},
 				Spec: v1alpha1.RedisInstanceSpec{
 					ForProvider: v1alpha1.RedisInstanceParameters{
 						Port: 1234,
@@ -357,6 +363,7 @@ func TestCreate(t *testing.T) {
 					Annotations: map[string]string{
 						crossplanemeta.AnnotationKeyExternalName: testName,
 					},
+					Name: testName,
 				},
 				Spec: v1alpha1.RedisInstanceSpec{
 					ForProvider: v1alpha1.RedisInstanceParameters{
@@ -544,6 +551,7 @@ func TestGetConnectionDetails(t *testing.T) {
 			},
 			want: want{
 				conn: managed.ConnectionDetails{
+					xpv1.ResourceCredentialsSecretUserKey:     []byte(testName),
 					xpv1.ResourceCredentialsSecretEndpointKey: []byte(address),
 					xpv1.ResourceCredentialsSecretPortKey:     []byte(port),
 				},
@@ -557,6 +565,7 @@ func TestGetConnectionDetails(t *testing.T) {
 						Annotations: map[string]string{
 							crossplanemeta.AnnotationKeyExternalName: testName,
 						},
+						Name: testName,
 					},
 					Spec: v1alpha1.RedisInstanceSpec{
 						ForProvider: v1alpha1.RedisInstanceParameters{},
@@ -584,6 +593,7 @@ func TestGetConnectionDetails(t *testing.T) {
 						Annotations: map[string]string{
 							crossplanemeta.AnnotationKeyExternalName: testName,
 						},
+						Name: testName,
 					},
 					Spec: v1alpha1.RedisInstanceSpec{
 						ForProvider: v1alpha1.RedisInstanceParameters{},
