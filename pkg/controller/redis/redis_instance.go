@@ -254,7 +254,7 @@ func (e *external) createAccount(cr *v1alpha1.RedisInstance) (string, error) {
 	}
 
 	// Use the instance id as the default user
-	err = e.client.CreateAccount(cr.Status.AtProvider.DBInstanceID, cr.Status.AtProvider.DBInstanceID, pw)
+	err = e.client.CreateAccount(cr.Status.AtProvider.DBInstanceID, meta.GetExternalName(cr), pw)
 	if err != nil {
 		// The previous request might fail due to timeout. That's fine we will eventually reconcile it.
 		var sdkerr sdkerror.Error
@@ -326,8 +326,8 @@ func (e *external) Delete(ctx context.Context, mg resource.Managed) error {
 func getConnectionDetails(password string, cr *v1alpha1.RedisInstance, instance *redis.DBInstance) managed.ConnectionDetails {
 	cd := managed.ConnectionDetails{}
 
-	if cr.Status.AtProvider.DBInstanceID != "" {
-		cd[xpv1.ResourceCredentialsSecretUserKey] = []byte(cr.Status.AtProvider.DBInstanceID)
+	if meta.GetExternalName(cr) != "" {
+		cd[xpv1.ResourceCredentialsSecretUserKey] = []byte(meta.GetExternalName(cr))
 	}
 
 	if password != "" {

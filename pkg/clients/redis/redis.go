@@ -40,6 +40,9 @@ const (
 	// DefaultReadTime indicates default connect timeout number
 	DefaultReadTime = 60 * time.Second
 
+	// Default Account privilege
+	DefaultAccountPrivilege = "RoleReadWrite"
+
 	// HTTPSScheme indicates request scheme
 	HTTPSScheme = "https"
 )
@@ -124,7 +127,7 @@ func (c *client) DescribeDBInstance(id string) (*DBInstance, error) {
 func (c *client) CreateDBInstance(externalName string, p *v1alpha1.RedisInstanceParameters) (*DBInstance, error) {
 	request := aliredis.CreateCreateInstanceRequest()
 
-	request.Scheme = HTTPSScheme
+	// request.Scheme = HTTPSScheme
 
 	// Seems regionID will be by default from the first part ZoneID
 	// request.RegionID = p.RegionID
@@ -192,6 +195,7 @@ func (c *client) CreateAccount(id, user, pw string) error {
 	request.AccountName = user
 	request.AccountPassword = pw
 	request.ReadTimeout = DefaultReadTime
+	// request.AccountPrivilege = DefaultAccountPrivilege
 
 	_, err := c.redisCli.CreateAccount(request)
 	return CleanError(err)
