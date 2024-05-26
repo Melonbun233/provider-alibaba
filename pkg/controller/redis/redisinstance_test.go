@@ -287,7 +287,7 @@ func TestObserve(t *testing.T) {
 			mg: &v1alpha1.RedisInstance{
 				Spec: v1alpha1.RedisInstanceSpec{
 					ForProvider: v1alpha1.RedisInstanceParameters{
-						Port: "1234",
+						Port: 1234,
 					},
 				},
 				Status: v1alpha1.RedisInstanceStatus{
@@ -362,7 +362,7 @@ func TestCreate(t *testing.T) {
 					ForProvider: v1alpha1.RedisInstanceParameters{
 						EngineVersion: "5.0",
 						InstanceClass: "redis.logic.sharding.2g.8db.0rodb.8proxy.default",
-						Port:          "8080",
+						Port:          8080,
 						// PubliclyAccessible: true,
 					},
 				},

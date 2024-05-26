@@ -138,7 +138,7 @@ spec:
                     type: string
                   port:
                     description: "Port is indicates the database service port Valid values: \t\t1024 to 65535 Default value: \t\t6379"
-                    type: string
+                    type: integer
                   privateIpAddress:
                     description: "The private IP address of the instance. Note: \t\tThe private IP address must be available within the CIDR block \t\tof the vSwitch to which to connect the instance."
                     type: string

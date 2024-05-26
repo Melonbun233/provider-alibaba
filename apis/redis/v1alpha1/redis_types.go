@@ -310,7 +310,7 @@ type RedisInstanceParameters struct {
 	// Default value:
 	//		6379
 	// +optional
-	Port string `json:"port,omitempty"`
+	Port int `json:"port,omitempty"`
 
 	// The global IP whitelist template for the instance. Multiple IP whitelist templates should
 	// be separated by English commas (,) and cannot be duplicated.

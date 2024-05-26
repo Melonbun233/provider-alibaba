@@ -158,7 +158,7 @@ func (c *client) CreateDBInstance(externalName string, p *v1alpha1.RedisInstance
 	request.GlobalInstanceId = p.GlobalInstanceId
 	request.GlobalInstance = requests.NewBoolean(p.GlobalInstance)
 	request.SecondaryZoneId = p.SecondaryZoneID
-	request.Port = p.Port
+	request.Port = strconv.Itoa(p.Port)
 	request.GlobalSecurityGroupIds = p.GlobalSecurityGroupIds
 	request.Appendonly = p.Appendonly
 	request.ConnectionStringPrefix = p.ConnectionStringPrefix
