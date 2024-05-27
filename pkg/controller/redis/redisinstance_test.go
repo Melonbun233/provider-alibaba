@@ -24,6 +24,8 @@ import (
 const testName = "testName"
 const testStatus = "testEndpoint"
 
+var testPort = 8080
+
 var testEndpoint = v1alpha1.Endpoint{Address: "test-address", Port: "test-port"}
 
 func TestConnector(t *testing.T) {
@@ -293,7 +295,7 @@ func TestObserve(t *testing.T) {
 				},
 				Spec: v1alpha1.RedisInstanceSpec{
 					ForProvider: v1alpha1.RedisInstanceParameters{
-						Port: 1234,
+						Port: &testPort,
 					},
 				},
 				Status: v1alpha1.RedisInstanceStatus{
@@ -369,7 +371,7 @@ func TestCreate(t *testing.T) {
 					ForProvider: v1alpha1.RedisInstanceParameters{
 						EngineVersion: "5.0",
 						InstanceClass: "redis.logic.sharding.2g.8db.0rodb.8proxy.default",
-						Port:          8080,
+						Port:          &testPort,
 						// PubliclyAccessible: true,
 					},
 				},

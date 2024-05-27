@@ -40,6 +40,8 @@ const (
 	// DefaultReadTime indicates default connect timeout number
 	DefaultReadTime = 60 * time.Second
 
+	DefaultConnectTime = 60 * time.Second
+
 	// Default Account privilege
 	DefaultAccountPrivilege = "RoleReadWrite"
 
@@ -128,13 +130,14 @@ func (c *client) CreateDBInstance(externalName string, p *v1alpha1.RedisInstance
 	request := aliredis.CreateCreateInstanceRequest()
 
 	// request.Scheme = HTTPSScheme
+	request.ConnectTimeout = DefaultConnectTime
+	request.ReadTimeout = DefaultReadTime
 
 	// Seems regionID will be by default from the first part ZoneID
 	// request.RegionID = p.RegionID
 	request.Token = p.Token
 	request.InstanceName = externalName
 	request.Password = p.Password
-	request.Capacity = requests.Integer(p.Capacity)
 	request.InstanceClass = p.InstanceClass
 	request.ZoneId = p.ZoneID
 	request.ChargeType = p.ChargeType
@@ -156,17 +159,30 @@ func (c *client) CreateDBInstance(externalName string, p *v1alpha1.RedisInstance
 	request.ResourceGroupId = p.ResourceGroupId
 	request.RestoreTime = p.RestoreTime
 	request.DedicatedHostGroupId = p.DedicatedHostGroupId
-	request.ShardCount = requests.NewInteger(p.ShardCount)
-	request.ReadOnlyCount = requests.NewInteger(p.ReadOnlyCount)
 	request.GlobalInstanceId = p.GlobalInstanceId
 	request.GlobalInstance = requests.NewBoolean(p.GlobalInstance)
 	request.SecondaryZoneId = p.SecondaryZoneID
-	request.Port = strconv.Itoa(p.Port)
 	request.GlobalSecurityGroupIds = p.GlobalSecurityGroupIds
 	request.Appendonly = p.Appendonly
 	request.ConnectionStringPrefix = p.ConnectionStringPrefix
 	request.ParamGroupId = p.ParamGroupId
 	request.ClusterBackupId = p.ClusterBackupId
+
+	if p.Port != nil {
+		request.Port = strconv.Itoa(*p.Port)
+	}
+
+	if p.Capacity != nil {
+		request.Capacity = requests.NewInteger(*p.Capacity)
+	}
+
+	if p.ShardCount != nil {
+		request.ShardCount = requests.NewInteger(*p.ShardCount)
+	}
+
+	if p.ReadOnlyCount != nil {
+		request.ReadOnlyCount = requests.NewInteger(*p.ReadOnlyCount)
+	}
 
 	requestTags := make([]aliredis.CreateInstanceTag, len(p.Tag))
 	for _, tag := range p.Tag {

@@ -84,7 +84,7 @@ spec:
                     type: string
                   capacity:
                     description: 'The storage capacity of the instance. Unit: MB. Note: You must specify at least one of the Capacity and InstanceClass parameters when you call this operation.'
-                    type: string
+                    type: integer
                   chargeType:
                     description: "ChargeType is indicates payment type Default value: PrePaid. Valid values: \t\tPrePaid: subscription \t\tPostPaid: pay-as-you-go"
                     type: string

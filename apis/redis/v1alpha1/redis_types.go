@@ -109,7 +109,7 @@ type RedisInstanceParameters struct {
 	// The storage capacity of the instance. Unit: MB.
 	// Note: You must specify at least one of the Capacity and InstanceClass parameters when you call this operation.
 	// +optional
-	Capacity string `json:"capacity,omitempty"`
+	Capacity *int `json:"capacity,omitempty"`
 
 	// The instance type.
 	// For example, redis.master.small.default indicates a Community Edition
@@ -269,14 +269,14 @@ type RedisInstanceParameters struct {
 	// The number of data shards.
 	// This parameter is available only if you create a cluster instance that uses cloud disks.
 	// +optional
-	ShardCount int `json:"shardCount,omitempty"`
+	ShardCount *int `json:"shardCount,omitempty"`
 
 	// The number of read-only nodes in the instance. This parameter is available
 	// only if you create a read/write splitting instance that uses cloud disks.
 	// Valid values:
 	//		1 to 5
 	// +optional
-	ReadOnlyCount int `json:"readOnlyCount,omitempty"`
+	ReadOnlyCount *int `json:"readOnlyCount,omitempty"`
 
 	// The ID of the distributed instance. This parameter is available only on the China site (aliyun.com).
 	// +optional
@@ -310,7 +310,7 @@ type RedisInstanceParameters struct {
 	// Default value:
 	//		6379
 	// +optional
-	Port int `json:"port,omitempty"`
+	Port *int `json:"port,omitempty"`
 
 	// The global IP whitelist template for the instance. Multiple IP whitelist templates should
 	// be separated by English commas (,) and cannot be duplicated.
