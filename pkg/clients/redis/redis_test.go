@@ -5,18 +5,17 @@ import (
 	"testing"
 
 	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/errors"
+	aliredis "github.com/aliyun/alibaba-cloud-sdk-go/services/r-kvstore"
 
 	"github.com/crossplane-contrib/provider-alibaba/apis/redis/v1alpha1"
 )
 
 func TestGenerateObservation(t *testing.T) {
-	ob := GenerateObservation(&Instance{
-		Status: v1alpha1.RedisInstanceStateRunning,
-		ID:     "test-id",
-		Endpoint: &v1alpha1.Endpoint{
-			Address: "test-address",
-			Port:    "test-port",
-		},
+	ob := GenerateObservation(&aliredis.DBInstanceAttribute{
+		InstanceStatus:   v1alpha1.RedisInstanceStateRunning,
+		InstanceId:       "test-id",
+		ConnectionDomain: "test-address",
+		Port:             8080,
 	})
 	if ob.DBInstanceStatus != v1alpha1.RedisInstanceStateRunning {
 		t.Errorf("RedisInstanceStatus: want=%v, get=%v", v1alpha1.RedisInstanceStateRunning, ob.DBInstanceStatus)

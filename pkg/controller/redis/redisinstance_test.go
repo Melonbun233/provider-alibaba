@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"testing"
 
+	aliredis "github.com/aliyun/alibaba-cloud-sdk-go/services/r-kvstore"
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	crossplanemeta "github.com/crossplane/crossplane-runtime/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
@@ -515,9 +516,10 @@ func TestGetConnectionDetails(t *testing.T) {
 	password := testPassword
 
 	type args struct {
-		pw string
-		cr *v1alpha1.RedisInstance
-		i  *redis.Instance
+		id       string
+		pw       string
+		cr       *v1alpha1.RedisInstance
+		endpoint *v1alpha1.Endpoint
 	}
 	type want struct {
 		conn managed.ConnectionDetails
@@ -529,13 +531,11 @@ func TestGetConnectionDetails(t *testing.T) {
 	}{
 		"SuccessfulNoPassword": {
 			args: args{
+				id: testId,
 				pw: "",
-				i: &redis.Instance{
-					ID: testId,
-					Endpoint: &v1alpha1.Endpoint{
-						Address: address,
-						Port:    port,
-					},
+				endpoint: &v1alpha1.Endpoint{
+					Address: address,
+					Port:    port,
 				},
 			},
 			want: want{
@@ -548,10 +548,8 @@ func TestGetConnectionDetails(t *testing.T) {
 		},
 		"SuccessfulNoEndpoint": {
 			args: args{
+				id: testId,
 				pw: password,
-				i: &redis.Instance{
-					ID: testId,
-				},
 			},
 			want: want{
 				conn: managed.ConnectionDetails{
@@ -562,13 +560,11 @@ func TestGetConnectionDetails(t *testing.T) {
 		},
 		"Successful": {
 			args: args{
+				id: testId,
 				pw: password,
-				i: &redis.Instance{
-					ID: testId,
-					Endpoint: &v1alpha1.Endpoint{
-						Address: address,
-						Port:    port,
-					},
+				endpoint: &v1alpha1.Endpoint{
+					Address: address,
+					Port:    port,
 				},
 			},
 			want: want{
@@ -584,7 +580,7 @@ func TestGetConnectionDetails(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			conn := getConnectionDetails(tc.args.pw, tc.args.i)
+			conn := getConnectionDetails(tc.args.id, tc.args.pw, tc.args.endpoint)
 			if diff := cmp.Diff(tc.want.conn, conn); diff != "" {
 				t.Errorf("getConnectionDetails(...): -want, +got:\n%s", diff)
 			}
@@ -594,31 +590,30 @@ func TestGetConnectionDetails(t *testing.T) {
 
 type fakeRedisClient struct{}
 
-func (c *fakeRedisClient) DescribeInstance(id string) (*redis.Instance, error) {
+func (c *fakeRedisClient) DescribeInstance(id string) (*aliredis.DBInstanceAttribute, error) {
 	if id != testId {
 		return nil, errors.New("DescribeRedisInstance: client doesn't work")
 	}
-	return &redis.Instance{
-		ID:     id,
-		Status: v1alpha1.RedisInstanceStateRunning,
+	return &aliredis.DBInstanceAttribute{
+		InstanceId:       id,
+		InstanceStatus:   v1alpha1.RedisInstanceStateRunning,
+		ConnectionDomain: testAddress,
+		Port:             int64(testPortInt),
+	}, nil
+}
+
+func (c *fakeRedisClient) CreateInstance(instanceName string, p *v1alpha1.RedisInstanceParameters) (*redis.CreateInstanceResponse, error) {
+	if instanceName != testName {
+		return nil, errors.New("CreateRedisInstance: client doesn't work")
+	}
+	return &redis.CreateInstanceResponse{
+		Id:       testId,
+		Password: testPassword,
 		Endpoint: &v1alpha1.Endpoint{
 			Address: testAddress,
 			Port:    testPort,
 		},
 	}, nil
-}
-
-func (c *fakeRedisClient) CreateInstance(instanceName string, p *v1alpha1.RedisInstanceParameters) (*redis.Instance, string, error) {
-	if instanceName != testName {
-		return nil, "", errors.New("CreateRedisInstance: client doesn't work")
-	}
-	return &redis.Instance{
-		ID: testId,
-		Endpoint: &v1alpha1.Endpoint{
-			Address: testAddress,
-			Port:    testPort,
-		},
-	}, testPassword, nil
 }
 
 func (c *fakeRedisClient) DeleteInstance(id string) error {

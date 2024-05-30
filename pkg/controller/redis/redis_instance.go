@@ -19,6 +19,7 @@ package redis
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"time"
 
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
@@ -167,13 +168,13 @@ func (e *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		}, nil
 	}
 
-	instance, err := e.redisClient.DescribeInstance(instanceId)
+	attr, err := e.redisClient.DescribeInstance(instanceId)
 	if err != nil {
 		fmt.Print(err.Error(), resource.Ignore(redis.IsErrorNotFound, err))
 		return managed.ExternalObservation{}, errors.Wrap(resource.Ignore(redis.IsErrorNotFound, err), errDescribeFailed)
 	}
 
-	cr.Status.AtProvider = redis.GenerateObservation(instance)
+	cr.Status.AtProvider = redis.GenerateObservation(attr)
 
 	switch cr.Status.AtProvider.DBInstanceStatus {
 	case v1alpha1.RedisInstanceStateRunning:
@@ -189,7 +190,7 @@ func (e *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	return managed.ExternalObservation{
 		ResourceExists:    true,
 		ResourceUpToDate:  true,
-		ConnectionDetails: getConnectionDetails("", instance),
+		ConnectionDetails: getConnectionDetails("", "", &v1alpha1.Endpoint{Address: attr.ConnectionDomain, Port: strconv.FormatInt(attr.Port, 10)}),
 	}, nil
 }
 
@@ -301,15 +302,15 @@ func (e *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalCreation{}, errors.Wrap(err, errStatusUpdate)
 	}
 
-	instance, pw, err := e.redisClient.CreateInstance(cr.GetObjectMeta().GetName(), &cr.Spec.ForProvider)
+	resp, err := e.redisClient.CreateInstance(cr.GetObjectMeta().GetName(), &cr.Spec.ForProvider)
 	if err != nil {
 		return managed.ExternalCreation{}, errors.Wrap(err, errCreateFailed)
 	}
 
-	meta.SetExternalName(cr, instance.ID)
+	meta.SetExternalName(cr, resp.Id)
 
 	// Any connection details emitted in ExternalClient are cumulative.
-	return managed.ExternalCreation{ConnectionDetails: getConnectionDetails(pw, instance)}, nil
+	return managed.ExternalCreation{ConnectionDetails: getConnectionDetails(resp.Id, resp.Password, resp.Endpoint)}, nil
 }
 
 func (e *external) Update(ctx context.Context, mg resource.Managed) (managed.ExternalUpdate, error) {
@@ -341,11 +342,11 @@ func (e *external) Delete(ctx context.Context, mg resource.Managed) error {
 	return errors.Wrap(resource.Ignore(redis.IsErrorNotFound, err), errDeleteFailed)
 }
 
-func getConnectionDetails(password string, instance *redis.Instance) managed.ConnectionDetails {
+func getConnectionDetails(id string, password string, endpoint *v1alpha1.Endpoint) managed.ConnectionDetails {
 	cd := managed.ConnectionDetails{}
 
 	// By default, a master user will be created with the instanceId
-	username := instance.ID
+	username := id
 
 	if username != "" {
 		cd[xpv1.ResourceCredentialsSecretUserKey] = []byte(username)
@@ -355,12 +356,12 @@ func getConnectionDetails(password string, instance *redis.Instance) managed.Con
 		cd[xpv1.ResourceCredentialsSecretPasswordKey] = []byte(password)
 	}
 
-	if instance.Endpoint != nil {
-		if instance.Endpoint.Address != "" {
-			cd[xpv1.ResourceCredentialsSecretEndpointKey] = []byte(instance.Endpoint.Address)
+	if endpoint != nil {
+		if endpoint.Address != "" {
+			cd[xpv1.ResourceCredentialsSecretEndpointKey] = []byte(endpoint.Address)
 		}
-		if instance.Endpoint.Port != "" {
-			cd[xpv1.ResourceCredentialsSecretPortKey] = []byte(instance.Endpoint.Port)
+		if endpoint.Port != "" {
+			cd[xpv1.ResourceCredentialsSecretPortKey] = []byte(endpoint.Port)
 		}
 	}
 

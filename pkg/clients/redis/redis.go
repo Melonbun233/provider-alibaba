@@ -31,11 +31,6 @@ import (
 	"github.com/crossplane-contrib/provider-alibaba/apis/redis/v1alpha1"
 )
 
-var (
-// ErrDBInstanceNotFound indicates DBInstance not found
-// ErrDBInstanceNotFound = errors.New("DBInstanceNotFound")
-)
-
 const (
 	// HTTPSScheme indicates request scheme
 	HTTPSScheme = "https"
@@ -57,8 +52,8 @@ type CleanedServerError struct {
 
 // Client defines Redis client operations
 type Client interface {
-	DescribeInstance(id string) (*Instance, error)
-	CreateInstance(name string, parameters *v1alpha1.RedisInstanceParameters) (*Instance, string, error)
+	DescribeInstance(id string) (*aliredis.DBInstanceAttribute, error)
+	CreateInstance(name string, parameters *v1alpha1.RedisInstanceParameters) (*CreateInstanceResponse, error)
 	DeleteInstance(id string) error
 	// AllocateInstancePublicConnection(id string, port int) (string, error)
 	// ModifyDBInstanceConnectionString(id string, port int) (string, error)
@@ -66,12 +61,12 @@ type Client interface {
 }
 
 // DBInstance defines the instance information
-type Instance struct {
+type CreateInstanceResponse struct {
 	// Instance ID
-	ID string
+	Id string
 
-	// Instance status
-	Status string
+	// Default password for the admin user
+	Password string
 
 	// Endpoint specifies the connection endpoint.
 	Endpoint *v1alpha1.Endpoint
@@ -96,33 +91,26 @@ func NewClient(ctx context.Context, accessKeyID, accessKeySecret, region string)
 	return c, nil
 }
 
-func (c *client) DescribeInstance(id string) (*Instance, error) {
-	request := aliredis.CreateDescribeInstancesRequest()
+func (c *client) DescribeInstance(id string) (*aliredis.DBInstanceAttribute, error) {
+	request := aliredis.CreateDescribeInstanceAttributeRequest()
 	request.Scheme = HTTPSScheme
 
-	request.InstanceIds = id
+	request.InstanceId = id
 
-	response, err := c.redisCli.DescribeInstances(request)
+	response, err := c.redisCli.DescribeInstanceAttribute(request)
 	if err != nil {
 		return nil, errors.Wrap(CleanError(err), errDescribeInstanceFailed)
 	}
-	if len(response.Instances.KVStoreInstance) == 0 {
+	if len(response.Instances.DBInstanceAttribute) == 0 {
 		return nil, errors.New(errInstanceNotFound)
 	}
-	rsp := response.Instances.KVStoreInstance[0]
-	in := &Instance{
-		ID:     rsp.InstanceId,
-		Status: rsp.InstanceStatus,
-		Endpoint: &v1alpha1.Endpoint{
-			Address: rsp.ConnectionDomain,
-			Port:    strconv.FormatInt(rsp.Port, 10),
-		},
-	}
 
-	return in, nil
+	attr := response.Instances.DBInstanceAttribute[0]
+
+	return &attr, nil
 }
 
-func (c *client) CreateInstance(externalName string, p *v1alpha1.RedisInstanceParameters) (*Instance, string, error) {
+func (c *client) CreateInstance(externalName string, p *v1alpha1.RedisInstanceParameters) (*CreateInstanceResponse, error) {
 	request := aliredis.CreateCreateInstanceRequest()
 
 	// Seems regionID will be by default from the first part ZoneID
@@ -181,7 +169,7 @@ func (c *client) CreateInstance(externalName string, p *v1alpha1.RedisInstancePa
 	if p.Password == "" {
 		pw, err = password.Generate()
 		if err != nil {
-			return nil, "", errors.Wrap(err, errGeneratePasswordFailed)
+			return nil, errors.Wrap(err, errGeneratePasswordFailed)
 		}
 	}
 	request.Password = pw
@@ -194,16 +182,17 @@ func (c *client) CreateInstance(externalName string, p *v1alpha1.RedisInstancePa
 
 	resp, err := c.redisCli.CreateInstance(request)
 	if err != nil {
-		return nil, "", CleanError(err)
+		return nil, CleanError(err)
 	}
 
-	return &Instance{
-		ID: resp.InstanceId,
+	return &CreateInstanceResponse{
+		Id:       resp.InstanceId,
+		Password: pw,
 		Endpoint: &v1alpha1.Endpoint{
 			Address: resp.ConnectionDomain,
 			Port:    strconv.Itoa(resp.Port),
 		},
-	}, pw, nil
+	}, nil
 }
 
 func (c *client) DeleteInstance(id string) error {
@@ -218,12 +207,12 @@ func (c *client) DeleteInstance(id string) error {
 
 // GenerateObservation is used to produce v1alpha1.RedisInstanceObservation from
 // redis.DBInstance.
-func GenerateObservation(instance *Instance) v1alpha1.RedisInstanceObservation {
+func GenerateObservation(attr *aliredis.DBInstanceAttribute) v1alpha1.RedisInstanceObservation {
 	return v1alpha1.RedisInstanceObservation{
-		DBInstanceStatus: instance.Status,
+		DBInstanceStatus: attr.InstanceStatus,
 		Endpoint: v1alpha1.Endpoint{
-			Address: instance.Endpoint.Address,
-			Port:    instance.Endpoint.Port,
+			Address: attr.ConnectionDomain,
+			Port:    strconv.FormatInt(attr.Port, 10),
 		},
 	}
 }

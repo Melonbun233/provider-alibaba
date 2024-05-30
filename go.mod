@@ -14,6 +14,7 @@ require (
 	github.com/crossplane/crossplane-tools v0.0.0-20201007233256-88b291e145bb
 	github.com/google/go-cmp v0.5.6
 	github.com/pkg/errors v0.9.1
+	go.uber.org/zap v1.19.1
 	golang.org/x/net v0.0.0-20210825183410-e898025ed96a
 	gopkg.in/alecthomas/kingpin.v2 v2.2.6
 	gopkg.in/yaml.v2 v2.4.0
@@ -74,7 +75,6 @@ require (
 	github.com/tjfoc/gmsm v1.3.2 // indirect
 	go.uber.org/atomic v1.9.0 // indirect
 	go.uber.org/multierr v1.6.0 // indirect
-	go.uber.org/zap v1.19.1 // indirect
 	golang.org/x/mod v0.4.2 // indirect
 	golang.org/x/oauth2 v0.0.0-20210819190943-2bc19b11175f // indirect
 	golang.org/x/sys v0.0.0-20220928140112-f11e5e49a4ec // indirect
