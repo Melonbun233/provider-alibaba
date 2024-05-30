@@ -21,12 +21,16 @@ import (
 	"github.com/crossplane-contrib/provider-alibaba/pkg/clients/redis"
 )
 
+const testId = "testId"
 const testName = "testName"
 const testStatus = "testEndpoint"
+const testPassword = "testPassword"
 
-var testPort = 8080
+const testPort = "8080"
+const testAddress = "172.0.0.1"
 
-var testEndpoint = v1alpha1.Endpoint{Address: "test-address", Port: "test-port"}
+var testPortInt = 8080
+var testEndpoint = v1alpha1.Endpoint{Address: testAddress, Port: testPort}
 
 func TestConnector(t *testing.T) {
 	errBoom := errors.New("boom")
@@ -247,7 +251,7 @@ func TestConnector(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			c := &redisConnector{client: tc.fields.client, usage: tc.fields.usage, newRedisClient: tc.fields.newRedisClient}
+			c := &redisConnector{kubeClient: tc.fields.client, usage: tc.fields.usage, newRedisClient: tc.fields.newRedisClient}
 			_, err := c.Connect(tc.args.ctx, tc.args.mg)
 			if diff := cmp.Diff(tc.want, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nc.Connect(...) -want error, +got error:\n%s\n", tc.reason, diff)
@@ -257,7 +261,7 @@ func TestConnector(t *testing.T) {
 }
 
 func TestObserve(t *testing.T) {
-	e := &external{client: &fakeRedisClient{}}
+	e := &external{redisClient: &fakeRedisClient{}}
 	type want struct {
 		ResourceExists   bool
 		ResourceUpToDate bool
@@ -272,13 +276,15 @@ func TestObserve(t *testing.T) {
 			mg: &v1alpha1.RedisInstance{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: testName,
+					Annotations: map[string]string{
+						crossplanemeta.AnnotationKeyExternalName: testId,
+					},
 				},
 				Spec: v1alpha1.RedisInstanceSpec{
 					ForProvider: v1alpha1.RedisInstanceParameters{},
 				},
 				Status: v1alpha1.RedisInstanceStatus{
 					AtProvider: v1alpha1.RedisInstanceObservation{
-						DBInstanceID:     testName,
 						DBInstanceStatus: testStatus,
 						Endpoint:         testEndpoint,
 					},
@@ -292,15 +298,17 @@ func TestObserve(t *testing.T) {
 			mg: &v1alpha1.RedisInstance{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: testName,
+					Annotations: map[string]string{
+						crossplanemeta.AnnotationKeyExternalName: testId,
+					},
 				},
 				Spec: v1alpha1.RedisInstanceSpec{
 					ForProvider: v1alpha1.RedisInstanceParameters{
-						Port: &testPort,
+						Port: &testPortInt,
 					},
 				},
 				Status: v1alpha1.RedisInstanceStatus{
 					AtProvider: v1alpha1.RedisInstanceObservation{
-						DBInstanceID:     testName,
 						DBInstanceStatus: testStatus,
 						Endpoint:         testEndpoint,
 					},
@@ -329,7 +337,7 @@ func TestObserve(t *testing.T) {
 }
 
 func TestCreate(t *testing.T) {
-	e := &external{client: &fakeRedisClient{}}
+	e := &external{redisClient: &fakeRedisClient{}}
 	type want struct {
 		u   managed.ExternalCreation
 		err error
@@ -345,25 +353,11 @@ func TestCreate(t *testing.T) {
 				u: managed.ExternalCreation{}, err: errors.New(errNotInstance),
 			},
 		},
-		"DBInstanceStatus is creating": {
-			mg: &v1alpha1.RedisInstance{
-				Status: v1alpha1.RedisInstanceStatus{
-					AtProvider: v1alpha1.RedisInstanceObservation{
-						DBInstanceStatus: v1alpha1.RedisInstanceStateCreating,
-						DBInstanceID:     testName,
-						Endpoint:         testEndpoint,
-					},
-				},
-			},
-			want: want{
-				u: managed.ExternalCreation{}, err: nil,
-			},
-		},
 		"Successfully create a managed resource": {
 			mg: &v1alpha1.RedisInstance{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
-						crossplanemeta.AnnotationKeyExternalName: testName,
+						crossplanemeta.AnnotationKeyExternalName: testId,
 					},
 					Name: testName,
 				},
@@ -371,7 +365,7 @@ func TestCreate(t *testing.T) {
 					ForProvider: v1alpha1.RedisInstanceParameters{
 						EngineVersion: "5.0",
 						InstanceClass: "redis.logic.sharding.2g.8db.0rodb.8proxy.default",
-						Port:          &testPort,
+						Port:          &testPortInt,
 						// PubliclyAccessible: true,
 					},
 				},
@@ -379,9 +373,10 @@ func TestCreate(t *testing.T) {
 			want: want{
 				u: managed.ExternalCreation{
 					ConnectionDetails: map[string][]byte{
-						"username": []byte(testName),
-						"endpoint": []byte("172.0.0.1"),
-						"port":     []byte(strconv.Itoa(8888)),
+						"username": []byte(testId),
+						"password": []byte(testPassword),
+						"endpoint": []byte(testAddress),
+						"port":     []byte(strconv.Itoa(testPortInt)),
 					}},
 				err: nil,
 			},
@@ -403,7 +398,7 @@ func TestCreate(t *testing.T) {
 }
 
 func TestUpdate(t *testing.T) {
-	e := &external{client: &fakeRedisClient{}}
+	e := &external{redisClient: &fakeRedisClient{}}
 	type want struct {
 		u   managed.ExternalUpdate
 		err error
@@ -422,7 +417,7 @@ func TestUpdate(t *testing.T) {
 		"Successfully update a managed resource": {
 			mg: &v1alpha1.RedisInstance{
 				ObjectMeta: metav1.ObjectMeta{
-					Annotations: map[string]string{crossplanemeta.AnnotationKeyExternalName: testName},
+					Annotations: map[string]string{crossplanemeta.AnnotationKeyExternalName: testId},
 				},
 				Spec: v1alpha1.RedisInstanceSpec{
 					ForProvider: v1alpha1.RedisInstanceParameters{
@@ -450,7 +445,7 @@ func TestUpdate(t *testing.T) {
 }
 
 func TestDelete(t *testing.T) {
-	e := &external{client: &fakeRedisClient{}}
+	e := &external{redisClient: &fakeRedisClient{}}
 	type want struct {
 		err error
 	}
@@ -470,7 +465,6 @@ func TestDelete(t *testing.T) {
 				Status: v1alpha1.RedisInstanceStatus{
 					AtProvider: v1alpha1.RedisInstanceObservation{
 						DBInstanceStatus: v1alpha1.RedisInstanceStateDeleting,
-						DBInstanceID:     testName,
 						Endpoint:         testEndpoint,
 					},
 				},
@@ -482,11 +476,10 @@ func TestDelete(t *testing.T) {
 		"Successfully delete a managed resource": {
 			mg: &v1alpha1.RedisInstance{
 				ObjectMeta: metav1.ObjectMeta{
-					Annotations: map[string]string{crossplanemeta.AnnotationKeyExternalName: testName},
+					Annotations: map[string]string{crossplanemeta.AnnotationKeyExternalName: testId},
 				},
 				Status: v1alpha1.RedisInstanceStatus{
 					AtProvider: v1alpha1.RedisInstanceObservation{
-						DBInstanceID:     testName,
 						DBInstanceStatus: testStatus,
 						Endpoint:         testEndpoint,
 					},
@@ -511,7 +504,7 @@ func TestDelete(t *testing.T) {
 func TestGetConnectionDetails(t *testing.T) {
 	address := testEndpoint.Address
 	port := testEndpoint.Port
-	password := "super-secret"
+	password := testPassword
 
 	type args struct {
 		pw string
@@ -529,22 +522,8 @@ func TestGetConnectionDetails(t *testing.T) {
 		"SuccessfulNoPassword": {
 			args: args{
 				pw: "",
-				cr: &v1alpha1.RedisInstance{
-					ObjectMeta: metav1.ObjectMeta{
-						Annotations: map[string]string{
-							crossplanemeta.AnnotationKeyExternalName: testName,
-						},
-					},
-					Spec: v1alpha1.RedisInstanceSpec{
-						ForProvider: v1alpha1.RedisInstanceParameters{},
-					},
-					Status: v1alpha1.RedisInstanceStatus{
-						AtProvider: v1alpha1.RedisInstanceObservation{
-							Endpoint: testEndpoint,
-						},
-					},
-				},
 				i: &redis.DBInstance{
+					ID: testId,
 					Endpoint: &v1alpha1.Endpoint{
 						Address: address,
 						Port:    port,
@@ -553,7 +532,7 @@ func TestGetConnectionDetails(t *testing.T) {
 			},
 			want: want{
 				conn: managed.ConnectionDetails{
-					xpv1.ResourceCredentialsSecretUserKey:     []byte(testName),
+					xpv1.ResourceCredentialsSecretUserKey:     []byte(testId),
 					xpv1.ResourceCredentialsSecretEndpointKey: []byte(address),
 					xpv1.ResourceCredentialsSecretPortKey:     []byte(port),
 				},
@@ -562,27 +541,13 @@ func TestGetConnectionDetails(t *testing.T) {
 		"SuccessfulNoEndpoint": {
 			args: args{
 				pw: password,
-				cr: &v1alpha1.RedisInstance{
-					ObjectMeta: metav1.ObjectMeta{
-						Annotations: map[string]string{
-							crossplanemeta.AnnotationKeyExternalName: testName,
-						},
-						Name: testName,
-					},
-					Spec: v1alpha1.RedisInstanceSpec{
-						ForProvider: v1alpha1.RedisInstanceParameters{},
-					},
-					Status: v1alpha1.RedisInstanceStatus{
-						AtProvider: v1alpha1.RedisInstanceObservation{
-							DBInstanceID: testName,
-						},
-					},
+				i: &redis.DBInstance{
+					ID: testId,
 				},
-				i: &redis.DBInstance{},
 			},
 			want: want{
 				conn: managed.ConnectionDetails{
-					xpv1.ResourceCredentialsSecretUserKey:     []byte(testName),
+					xpv1.ResourceCredentialsSecretUserKey:     []byte(testId),
 					xpv1.ResourceCredentialsSecretPasswordKey: []byte(password),
 				},
 			},
@@ -590,24 +555,8 @@ func TestGetConnectionDetails(t *testing.T) {
 		"Successful": {
 			args: args{
 				pw: password,
-				cr: &v1alpha1.RedisInstance{
-					ObjectMeta: metav1.ObjectMeta{
-						Annotations: map[string]string{
-							crossplanemeta.AnnotationKeyExternalName: testName,
-						},
-						Name: testName,
-					},
-					Spec: v1alpha1.RedisInstanceSpec{
-						ForProvider: v1alpha1.RedisInstanceParameters{},
-					},
-					Status: v1alpha1.RedisInstanceStatus{
-						AtProvider: v1alpha1.RedisInstanceObservation{
-							DBInstanceID: testName,
-							Endpoint:     testEndpoint,
-						},
-					},
-				},
 				i: &redis.DBInstance{
+					ID: testId,
 					Endpoint: &v1alpha1.Endpoint{
 						Address: address,
 						Port:    port,
@@ -616,7 +565,7 @@ func TestGetConnectionDetails(t *testing.T) {
 			},
 			want: want{
 				conn: managed.ConnectionDetails{
-					xpv1.ResourceCredentialsSecretUserKey:     []byte(testName),
+					xpv1.ResourceCredentialsSecretUserKey:     []byte(testId),
 					xpv1.ResourceCredentialsSecretPasswordKey: []byte(password),
 					xpv1.ResourceCredentialsSecretEndpointKey: []byte(address),
 					xpv1.ResourceCredentialsSecretPortKey:     []byte(port),
@@ -627,7 +576,7 @@ func TestGetConnectionDetails(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			conn := getConnectionDetails(tc.args.pw, tc.args.cr, tc.args.i)
+			conn := getConnectionDetails(tc.args.pw, tc.args.i)
 			if diff := cmp.Diff(tc.want.conn, conn); diff != "" {
 				t.Errorf("getConnectionDetails(...): -want, +got:\n%s", diff)
 			}
@@ -638,62 +587,62 @@ func TestGetConnectionDetails(t *testing.T) {
 type fakeRedisClient struct{}
 
 func (c *fakeRedisClient) DescribeDBInstance(id string) (*redis.DBInstance, error) {
-	if id != testName {
+	if id != testId {
 		return nil, errors.New("DescribeRedisInstance: client doesn't work")
 	}
 	return &redis.DBInstance{
 		ID:     id,
 		Status: v1alpha1.RedisInstanceStateRunning,
 		Endpoint: &v1alpha1.Endpoint{
-			Address: "172.0.0.1",
-			Port:    "8888",
+			Address: testAddress,
+			Port:    testPort,
 		},
 	}, nil
 }
 
-func (c *fakeRedisClient) CreateDBInstance(instanceName string, p *v1alpha1.RedisInstanceParameters) (*redis.DBInstance, error) {
+func (c *fakeRedisClient) CreateDBInstance(instanceName string, p *v1alpha1.RedisInstanceParameters) (*redis.DBInstance, string, error) {
 	if instanceName != testName {
-		return nil, errors.New("CreateRedisInstance: client doesn't work")
+		return nil, "", errors.New("CreateRedisInstance: client doesn't work")
 	}
 	return &redis.DBInstance{
-		ID: testName,
+		ID: testId,
 		Endpoint: &v1alpha1.Endpoint{
-			Address: "172.0.0.1",
-			Port:    "8888",
+			Address: testAddress,
+			Port:    testPort,
 		},
-	}, nil
+	}, testPassword, nil
 }
 
 func (c *fakeRedisClient) CreateAccount(id, user, pw string) error {
-	if id != testName {
+	if id != testId {
 		return errors.New("CreateAccount: client doesn't work")
 	}
 	return nil
 }
 
 func (c *fakeRedisClient) DeleteDBInstance(id string) error {
-	if id != testName {
+	if id != testId {
 		return errors.New("DeleteRedisInstance: client doesn't work")
 	}
 	return nil
 }
 
-func (c *fakeRedisClient) AllocateInstancePublicConnection(id string, port int) (string, error) {
-	if id != testName {
-		return "nil", errors.New("AllocateInstancePublicConnection: client doesn't work")
-	}
-	return "", nil
-}
+// func (c *fakeRedisClient) AllocateInstancePublicConnection(id string, port int) (string, error) {
+// 	if id != testId {
+// 		return "nil", errors.New("AllocateInstancePublicConnection: client doesn't work")
+// 	}
+// 	return "", nil
+// }
 
-func (c *fakeRedisClient) ModifyDBInstanceConnectionString(id string, port int) (string, error) {
-	if id != testName {
-		return "nil", errors.New("ModifyDBInstanceConnectionString: client doesn't work")
-	}
-	return "", nil
-}
+// func (c *fakeRedisClient) ModifyDBInstanceConnectionString(id string, port int) (string, error) {
+// 	if id != testId {
+// 		return "nil", errors.New("ModifyDBInstanceConnectionString: client doesn't work")
+// 	}
+// 	return "", nil
+// }
 
 func (c *fakeRedisClient) Update(id string, req *redis.ModifyRedisInstanceRequest) error {
-	if id != testName {
+	if id != testId {
 		return errors.New("Update: client doesn't work")
 	}
 	return nil

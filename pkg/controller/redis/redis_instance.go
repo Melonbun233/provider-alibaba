@@ -19,13 +19,12 @@ package redis
 import (
 	"context"
 	"fmt"
+	"time"
 
-	sdkerror "github.com/aliyun/alibaba-cloud-sdk-go/sdk/errors"
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/event"
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
 	"github.com/crossplane/crossplane-runtime/pkg/meta"
-	"github.com/crossplane/crossplane-runtime/pkg/password"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 	"github.com/pkg/errors"
@@ -40,50 +39,66 @@ import (
 )
 
 const (
+	controllerName = "AliCloud Controller"
 	// Fall to connection instance error description
 	errCreateInstanceConnectionFailed = "cannot instance connection"
 
-	errNotInstance         = "managed resource is not an instance custom resource"
-	errNoProvider          = "no provider config or provider specified"
-	errCreateClient        = "cannot create redis client"
-	errGetProviderConfig   = "cannot get provider config"
-	errTrackUsage          = "cannot track provider config usage"
-	errNoConnectionSecret  = "no connection secret specified"
-	errGetConnectionSecret = "cannot get connection secret"
+	errNotInstance            = "managed resource is not an instance custom resource"
+	errNoProvider             = "no provider config or provider specified"
+	errCreateClient           = "cannot create redis client"
+	errGetProviderConfig      = "cannot get provider config"
+	errTrackUsage             = "cannot track provider config usage"
+	errNoConnectionSecret     = "no connection secret specified"
+	errGetConnectionSecret    = "cannot get connection secret"
+	errInstanceIdEmpty        = "instance id is empty, maybe it's not created"
+	errInstanceAlreadyCreated = "instance id is not empty, maybe it's already been created"
+	errStatusUpdate           = "failed to update CR status"
 
 	errCreateFailed        = "cannot create redis instance"
 	errCreateAccountFailed = "cannot create redis account"
 	errDeleteFailed        = "cannot delete redis instance"
 	errDescribeFailed      = "cannot describe redis instance"
+	errAccountNameInvalid  = "instance name is invalid"
 
 	errFmtUnsupportedCredSource = "credentials source %q is not currently supported"
 	errDuplicateConnectionPort  = "InvalidConnectionStringOrPort.Duplicate"
 	errAccountNameDuplicate     = "InvalidAccountName.Duplicate"
-
-	// Default port of redis database
-	defaultRedisPort = "6379"
 )
 
 // SetupRedisInstance adds a controller that reconciles RedisInstances.
 func SetupRedisInstance(mgr ctrl.Manager, l logging.Logger) error {
 	name := managed.ControllerName(v1alpha1.RedisInstanceGroupKind)
 
+	connector := &redisConnector{
+		kubeClient:     mgr.GetClient(),
+		usage:          resource.NewProviderConfigUsageTracker(mgr.GetClient(), &aliv1beta1.ProviderConfigUsage{}),
+		newRedisClient: redis.NewClient,
+	}
+
+	reconcilerOpts := []managed.ReconcilerOption{
+		managed.WithExternalConnecter(connector),
+		managed.WithLogger(l.WithValues(controllerName, name)),
+		managed.WithRecorder(event.NewAPIRecorder(mgr.GetEventRecorderFor(name))),
+		// Use empty initializer to make sure the externalName is not initialized
+		// externalName is going to be updated after a successful creation
+		managed.WithInitializers(),
+		managed.WithCreationGracePeriod(3 * time.Minute),
+	}
+
+	r := managed.NewReconciler(
+		mgr,
+		resource.ManagedKind(v1alpha1.RedisInstanceGroupVersionKind),
+		reconcilerOpts...,
+	)
+
 	return ctrl.NewControllerManagedBy(mgr).
 		Named(name).
 		For(&v1alpha1.RedisInstance{}).
-		Complete(managed.NewReconciler(mgr,
-			resource.ManagedKind(v1alpha1.RedisInstanceGroupVersionKind),
-			managed.WithExternalConnecter(&redisConnector{
-				client:         mgr.GetClient(),
-				usage:          resource.NewProviderConfigUsageTracker(mgr.GetClient(), &aliv1beta1.ProviderConfigUsage{}),
-				newRedisClient: redis.NewClient,
-			}),
-			managed.WithLogger(l.WithValues("controller", name)),
-			managed.WithRecorder(event.NewAPIRecorder(mgr.GetEventRecorderFor(name)))))
+		Complete(r)
 }
 
 type redisConnector struct {
-	client         client.Client
+	kubeClient     client.Client
 	usage          resource.Tracker
 	newRedisClient func(ctx context.Context, accessKeyID, accessKeySecret, region string) (redis.Client, error)
 }
@@ -107,7 +122,7 @@ func (c *redisConnector) Connect(ctx context.Context, mg resource.Managed) (mana
 		}
 
 		pc := &aliv1beta1.ProviderConfig{}
-		if err := c.client.Get(ctx, types.NamespacedName{Name: cr.Spec.ProviderConfigReference.Name}, pc); err != nil {
+		if err := c.kubeClient.Get(ctx, types.NamespacedName{Name: cr.Spec.ProviderConfigReference.Name}, pc); err != nil {
 			return nil, errors.Wrap(err, errGetProviderConfig)
 		}
 		if s := pc.Spec.Credentials.Source; s != xpv1.CredentialsSourceSecret {
@@ -125,16 +140,17 @@ func (c *redisConnector) Connect(ctx context.Context, mg resource.Managed) (mana
 
 	s := &corev1.Secret{}
 	nn := types.NamespacedName{Namespace: sel.Namespace, Name: sel.Name}
-	if err := c.client.Get(ctx, nn, s); err != nil {
+	if err := c.kubeClient.Get(ctx, nn, s); err != nil {
 		return nil, errors.Wrap(err, errGetConnectionSecret)
 	}
 
 	redisClient, err := c.newRedisClient(ctx, string(s.Data["accessKeyId"]), string(s.Data["accessKeySecret"]), region)
-	return &external{client: redisClient}, errors.Wrap(err, errCreateClient)
+	return &external{redisClient: redisClient, kubeClient: c.kubeClient}, errors.Wrap(err, errCreateClient)
 }
 
 type external struct {
-	client redis.Client
+	redisClient redis.Client
+	kubeClient  client.Client
 }
 
 func (e *external) Observe(ctx context.Context, mg resource.Managed) (managed.ExternalObservation, error) {
@@ -143,29 +159,25 @@ func (e *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		return managed.ExternalObservation{}, errors.New(errNotInstance)
 	}
 
-	if cr.Status.AtProvider.DBInstanceID == "" {
-		return managed.ExternalObservation{}, nil
+	instanceId := meta.GetExternalName(cr)
+	// externalName will not be initialized until a successful creation
+	if instanceId == "" {
+		return managed.ExternalObservation{
+			ResourceExists: false,
+		}, nil
 	}
 
-	instance, err := e.client.DescribeDBInstance(cr.Status.AtProvider.DBInstanceID)
+	instance, err := e.redisClient.DescribeDBInstance(instanceId)
 	if err != nil {
 		fmt.Print(err.Error(), resource.Ignore(redis.IsErrorNotFound, err))
 		return managed.ExternalObservation{}, errors.Wrap(resource.Ignore(redis.IsErrorNotFound, err), errDescribeFailed)
 	}
 
 	cr.Status.AtProvider = redis.GenerateObservation(instance)
-	var pw string
+
 	switch cr.Status.AtProvider.DBInstanceStatus {
 	case v1alpha1.RedisInstanceStateRunning:
 		cr.Status.SetConditions(xpv1.Available())
-
-		// TODO: Support update connection port
-		cr.Status.AtProvider.ConnectionReady = true
-
-		pw, err = e.createAccount(cr)
-		if err != nil {
-			return managed.ExternalObservation{}, errors.Wrap(err, errCreateAccountFailed)
-		}
 	case v1alpha1.RedisInstanceStateCreating:
 		cr.Status.SetConditions(xpv1.Creating())
 	case v1alpha1.RedisInstanceStateDeleting:
@@ -177,7 +189,7 @@ func (e *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	return managed.ExternalObservation{
 		ResourceExists:    true,
 		ResourceUpToDate:  true,
-		ConnectionDetails: getConnectionDetails(pw, cr, instance),
+		ConnectionDetails: getConnectionDetails("", instance),
 	}, nil
 }
 
@@ -243,33 +255,40 @@ func (e *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 // 	return domain, port, nil
 // }
 
-func (e *external) createAccount(cr *v1alpha1.RedisInstance) (string, error) {
-	if cr.Status.AtProvider.AccountReady {
-		return "", nil
-	}
+// func (e *external) createAccount(cr *v1alpha1.RedisInstance) (string, error) {
+// 	if cr.Status.AtProvider.AccountReady {
+// 		return "", nil
+// 	}
 
-	pw, err := password.Generate()
-	if err != nil {
-		return "", err
-	}
+// 	pw, err := password.Generate()
+// 	if err != nil {
+// 		return "", err
+// 	}
 
-	// Use the instance id as the default user
-	err = e.client.CreateAccount(cr.Status.AtProvider.DBInstanceID, meta.GetExternalName(cr), pw)
-	if err != nil {
-		// The previous request might fail due to timeout. That's fine we will eventually reconcile it.
-		var sdkerr sdkerror.Error
-		if errors.As(err, &sdkerr) {
-			if sdkerr.ErrorCode() == errAccountNameDuplicate {
-				cr.Status.AtProvider.AccountReady = true
-				return "", nil
-			}
-		}
-		return "", err
-	}
+// 	instanceId, err := getInstanceId(cr)
+// 	if err != nil {
+// 		return "", err
+// 	}
 
-	cr.Status.AtProvider.AccountReady = true
-	return pw, nil
-}
+// 	username := getUsername(cr)
+
+// 	// Use the instance name as the default user
+// 	err = e.client.CreateAccount(instanceId, username, pw)
+// 	if err != nil {
+// 		// The previous request might fail due to timeout. That's fine we will eventually reconcile it.
+// 		var sdkerr sdkerror.Error
+// 		if errors.As(err, &sdkerr) {
+// 			if sdkerr.ErrorCode() == errAccountNameDuplicate {
+// 				cr.Status.AtProvider.AccountReady = true
+// 				return "", nil
+// 			}
+// 		}
+// 		return "", err
+// 	}
+
+// 	cr.Status.AtProvider.AccountReady = true
+// 	return pw, nil
+// }
 
 func (e *external) Create(ctx context.Context, mg resource.Managed) (managed.ExternalCreation, error) {
 	cr, ok := mg.(*v1alpha1.RedisInstance)
@@ -277,21 +296,20 @@ func (e *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalCreation{}, errors.New(errNotInstance)
 	}
 
-	cr.SetConditions(xpv1.Creating())
-	if cr.Status.AtProvider.DBInstanceStatus == v1alpha1.RedisInstanceStateCreating {
-		return managed.ExternalCreation{}, nil
+	cr.Status.SetConditions(xpv1.Creating())
+	if err := e.kubeClient.Status().Update(ctx, cr); err != nil {
+		return managed.ExternalCreation{}, errors.Wrap(err, errStatusUpdate)
 	}
 
-	instance, err := e.client.CreateDBInstance(meta.GetExternalName(cr), &cr.Spec.ForProvider)
+	instance, pw, err := e.redisClient.CreateDBInstance(cr.GetObjectMeta().GetName(), &cr.Spec.ForProvider)
 	if err != nil {
 		return managed.ExternalCreation{}, errors.Wrap(err, errCreateFailed)
 	}
 
-	// The Crossplane runtime will send status update back to apiserver.
-	cr.Status.AtProvider.DBInstanceID = instance.ID
+	meta.SetExternalName(cr, instance.ID)
 
 	// Any connection details emitted in ExternalClient are cumulative.
-	return managed.ExternalCreation{ConnectionDetails: getConnectionDetails("", cr, instance)}, nil
+	return managed.ExternalCreation{ConnectionDetails: getConnectionDetails(pw, instance)}, nil
 }
 
 func (e *external) Update(ctx context.Context, mg resource.Managed) (managed.ExternalUpdate, error) {
@@ -299,13 +317,15 @@ func (e *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 	if !ok {
 		return managed.ExternalUpdate{}, errors.New(errNotInstance)
 	}
-	name := meta.GetExternalName(cr)
+
+	cr.Status.SetConditions(xpv1.Creating())
+
 	description := cr.Spec.ForProvider
 	modifyReq := &redis.ModifyRedisInstanceRequest{
 		InstanceClass: description.InstanceClass,
 	}
-	cr.Status.SetConditions(xpv1.Creating())
-	err := e.client.Update(name, modifyReq)
+	err := e.redisClient.Update(meta.GetExternalName(cr), modifyReq)
+
 	return managed.ExternalUpdate{}, err
 }
 
@@ -314,20 +334,21 @@ func (e *external) Delete(ctx context.Context, mg resource.Managed) error {
 	if !ok {
 		return errors.New(errNotInstance)
 	}
-	cr.SetConditions(xpv1.Deleting())
-	if cr.Status.AtProvider.DBInstanceStatus == v1alpha1.RedisInstanceStateDeleting {
-		return nil
-	}
 
-	err := e.client.DeleteDBInstance(cr.Status.AtProvider.DBInstanceID)
+	cr.SetConditions(xpv1.Deleting())
+
+	err := e.redisClient.DeleteDBInstance(meta.GetExternalName(cr))
 	return errors.Wrap(resource.Ignore(redis.IsErrorNotFound, err), errDeleteFailed)
 }
 
-func getConnectionDetails(password string, cr *v1alpha1.RedisInstance, instance *redis.DBInstance) managed.ConnectionDetails {
+func getConnectionDetails(password string, instance *redis.DBInstance) managed.ConnectionDetails {
 	cd := managed.ConnectionDetails{}
 
-	if meta.GetExternalName(cr) != "" {
-		cd[xpv1.ResourceCredentialsSecretUserKey] = []byte(meta.GetExternalName(cr))
+	// By default, a master user will be created with the instanceId
+	username := instance.ID
+
+	if username != "" {
+		cd[xpv1.ResourceCredentialsSecretUserKey] = []byte(username)
 	}
 
 	if password != "" {
@@ -335,8 +356,12 @@ func getConnectionDetails(password string, cr *v1alpha1.RedisInstance, instance 
 	}
 
 	if instance.Endpoint != nil {
-		cd[xpv1.ResourceCredentialsSecretEndpointKey] = []byte(instance.Endpoint.Address)
-		cd[xpv1.ResourceCredentialsSecretPortKey] = []byte(instance.Endpoint.Port)
+		if instance.Endpoint.Address != "" {
+			cd[xpv1.ResourceCredentialsSecretEndpointKey] = []byte(instance.Endpoint.Address)
+		}
+		if instance.Endpoint.Port != "" {
+			cd[xpv1.ResourceCredentialsSecretPortKey] = []byte(instance.Endpoint.Port)
+		}
 	}
 
 	return cd

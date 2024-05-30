@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/crossplane/crossplane-runtime/pkg/password"
 	"github.com/pkg/errors"
 
 	sdkerrors "github.com/aliyun/alibaba-cloud-sdk-go/sdk/errors"
@@ -47,6 +48,9 @@ const (
 
 	// HTTPSScheme indicates request scheme
 	HTTPSScheme = "https"
+
+	// Errors
+	errGeneratePasswordFailed = "cannot generate a password"
 )
 
 // Same server error but without requestID
@@ -61,8 +65,8 @@ type CleanedServerError struct {
 // Client defines Redis client operations
 type Client interface {
 	DescribeDBInstance(id string) (*DBInstance, error)
-	CreateAccount(id, username, password string) error
-	CreateDBInstance(externalName string, parameters *v1alpha1.RedisInstanceParameters) (*DBInstance, error)
+	// CreateAccount(id, username, password string) error
+	CreateDBInstance(externalName string, parameters *v1alpha1.RedisInstanceParameters) (*DBInstance, string, error)
 	DeleteDBInstance(id string) error
 	// AllocateInstancePublicConnection(id string, port int) (string, error)
 	// ModifyDBInstanceConnectionString(id string, port int) (string, error)
@@ -126,7 +130,7 @@ func (c *client) DescribeDBInstance(id string) (*DBInstance, error) {
 	return in, nil
 }
 
-func (c *client) CreateDBInstance(externalName string, p *v1alpha1.RedisInstanceParameters) (*DBInstance, error) {
+func (c *client) CreateDBInstance(externalName string, p *v1alpha1.RedisInstanceParameters) (*DBInstance, string, error) {
 	request := aliredis.CreateCreateInstanceRequest()
 
 	// request.Scheme = HTTPSScheme
@@ -137,7 +141,6 @@ func (c *client) CreateDBInstance(externalName string, p *v1alpha1.RedisInstance
 	// request.RegionID = p.RegionID
 	request.Token = p.Token
 	request.InstanceName = externalName
-	request.Password = p.Password
 	request.InstanceClass = p.InstanceClass
 	request.ZoneId = p.ZoneID
 	request.ChargeType = p.ChargeType
@@ -184,6 +187,17 @@ func (c *client) CreateDBInstance(externalName string, p *v1alpha1.RedisInstance
 		request.ReadOnlyCount = requests.NewInteger(*p.ReadOnlyCount)
 	}
 
+	// Password might be generated or provided by user
+	var pw string
+	var err error
+	if p.Password == "" {
+		pw, err = password.Generate()
+		if err != nil {
+			return nil, "", errors.Wrap(err, errGeneratePasswordFailed)
+		}
+	}
+	request.Password = pw
+
 	requestTags := make([]aliredis.CreateInstanceTag, len(p.Tag))
 	for _, tag := range p.Tag {
 		requestTags = append(requestTags, aliredis.CreateInstanceTag{Key: tag.Key, Value: tag.Value})
@@ -192,7 +206,7 @@ func (c *client) CreateDBInstance(externalName string, p *v1alpha1.RedisInstance
 
 	resp, err := c.redisCli.CreateInstance(request)
 	if err != nil {
-		return nil, CleanError(err)
+		return nil, "", CleanError(err)
 	}
 
 	return &DBInstance{
@@ -201,7 +215,7 @@ func (c *client) CreateDBInstance(externalName string, p *v1alpha1.RedisInstance
 			Address: resp.ConnectionDomain,
 			Port:    strconv.Itoa(resp.Port),
 		},
-	}, nil
+	}, pw, nil
 }
 
 func (c *client) CreateAccount(id, user, pw string) error {
@@ -232,7 +246,6 @@ func (c *client) DeleteDBInstance(id string) error {
 func GenerateObservation(db *DBInstance) v1alpha1.RedisInstanceObservation {
 	return v1alpha1.RedisInstanceObservation{
 		DBInstanceStatus: db.Status,
-		DBInstanceID:     db.ID,
 		Endpoint: v1alpha1.Endpoint{
 			Address: db.Endpoint.Address,
 			Port:    db.Endpoint.Port,

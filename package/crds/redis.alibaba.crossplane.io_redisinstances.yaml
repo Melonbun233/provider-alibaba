@@ -237,9 +237,6 @@ spec:
                   connectionReady:
                     description: ConnectionReady specifies whether the network connect is ready
                     type: boolean
-                  dbInstanceID:
-                    description: DBInstanceID specifies the Redis instance ID.
-                    type: string
                   dbInstanceStatus:
                     description: DBInstanceStatus specifies the current state of this database.
                     type: string
@@ -256,7 +253,6 @@ spec:
                 required:
                 - accountReady
                 - connectionReady
-                - dbInstanceID
                 - endpoint
                 type: object
               conditions:
