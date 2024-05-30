@@ -337,7 +337,12 @@ func TestObserve(t *testing.T) {
 }
 
 func TestCreate(t *testing.T) {
-	e := &external{redisClient: &fakeRedisClient{}}
+	e := &external{redisClient: &fakeRedisClient{}, kubeClient: &test.MockClient{
+		MockStatusUpdate: test.NewMockStatusUpdateFn(nil, func(obj client.Object) error {
+			return nil
+		}),
+	}}
+
 	type want struct {
 		u   managed.ExternalCreation
 		err error
@@ -462,6 +467,9 @@ func TestDelete(t *testing.T) {
 		},
 		"Managed resource is already in a delete state": {
 			mg: &v1alpha1.RedisInstance{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{crossplanemeta.AnnotationKeyExternalName: testId},
+				},
 				Status: v1alpha1.RedisInstanceStatus{
 					AtProvider: v1alpha1.RedisInstanceObservation{
 						DBInstanceStatus: v1alpha1.RedisInstanceStateDeleting,
