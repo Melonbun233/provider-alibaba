@@ -517,7 +517,7 @@ func TestGetConnectionDetails(t *testing.T) {
 	type args struct {
 		pw string
 		cr *v1alpha1.RedisInstance
-		i  *redis.DBInstance
+		i  *redis.Instance
 	}
 	type want struct {
 		conn managed.ConnectionDetails
@@ -530,7 +530,7 @@ func TestGetConnectionDetails(t *testing.T) {
 		"SuccessfulNoPassword": {
 			args: args{
 				pw: "",
-				i: &redis.DBInstance{
+				i: &redis.Instance{
 					ID: testId,
 					Endpoint: &v1alpha1.Endpoint{
 						Address: address,
@@ -549,7 +549,7 @@ func TestGetConnectionDetails(t *testing.T) {
 		"SuccessfulNoEndpoint": {
 			args: args{
 				pw: password,
-				i: &redis.DBInstance{
+				i: &redis.Instance{
 					ID: testId,
 				},
 			},
@@ -563,7 +563,7 @@ func TestGetConnectionDetails(t *testing.T) {
 		"Successful": {
 			args: args{
 				pw: password,
-				i: &redis.DBInstance{
+				i: &redis.Instance{
 					ID: testId,
 					Endpoint: &v1alpha1.Endpoint{
 						Address: address,
@@ -594,11 +594,11 @@ func TestGetConnectionDetails(t *testing.T) {
 
 type fakeRedisClient struct{}
 
-func (c *fakeRedisClient) DescribeDBInstance(id string) (*redis.DBInstance, error) {
+func (c *fakeRedisClient) DescribeInstance(id string) (*redis.Instance, error) {
 	if id != testId {
 		return nil, errors.New("DescribeRedisInstance: client doesn't work")
 	}
-	return &redis.DBInstance{
+	return &redis.Instance{
 		ID:     id,
 		Status: v1alpha1.RedisInstanceStateRunning,
 		Endpoint: &v1alpha1.Endpoint{
@@ -608,11 +608,11 @@ func (c *fakeRedisClient) DescribeDBInstance(id string) (*redis.DBInstance, erro
 	}, nil
 }
 
-func (c *fakeRedisClient) CreateDBInstance(instanceName string, p *v1alpha1.RedisInstanceParameters) (*redis.DBInstance, string, error) {
+func (c *fakeRedisClient) CreateInstance(instanceName string, p *v1alpha1.RedisInstanceParameters) (*redis.Instance, string, error) {
 	if instanceName != testName {
 		return nil, "", errors.New("CreateRedisInstance: client doesn't work")
 	}
-	return &redis.DBInstance{
+	return &redis.Instance{
 		ID: testId,
 		Endpoint: &v1alpha1.Endpoint{
 			Address: testAddress,
@@ -621,14 +621,7 @@ func (c *fakeRedisClient) CreateDBInstance(instanceName string, p *v1alpha1.Redi
 	}, testPassword, nil
 }
 
-func (c *fakeRedisClient) CreateAccount(id, user, pw string) error {
-	if id != testId {
-		return errors.New("CreateAccount: client doesn't work")
-	}
-	return nil
-}
-
-func (c *fakeRedisClient) DeleteDBInstance(id string) error {
+func (c *fakeRedisClient) DeleteInstance(id string) error {
 	if id != testId {
 		return errors.New("DeleteRedisInstance: client doesn't work")
 	}
@@ -649,7 +642,7 @@ func (c *fakeRedisClient) DeleteDBInstance(id string) error {
 // 	return "", nil
 // }
 
-func (c *fakeRedisClient) Update(id string, req *redis.ModifyRedisInstanceRequest) error {
+func (c *fakeRedisClient) UpdateInstance(id string, req *redis.ModifyRedisInstanceRequest) error {
 	if id != testId {
 		return errors.New("Update: client doesn't work")
 	}

@@ -10,7 +10,7 @@ import (
 )
 
 func TestGenerateObservation(t *testing.T) {
-	ob := GenerateObservation(&DBInstance{
+	ob := GenerateObservation(&Instance{
 		Status: v1alpha1.RedisInstanceStateRunning,
 		ID:     "test-id",
 		Endpoint: &v1alpha1.Endpoint{

@@ -167,7 +167,7 @@ func (e *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		}, nil
 	}
 
-	instance, err := e.redisClient.DescribeDBInstance(instanceId)
+	instance, err := e.redisClient.DescribeInstance(instanceId)
 	if err != nil {
 		fmt.Print(err.Error(), resource.Ignore(redis.IsErrorNotFound, err))
 		return managed.ExternalObservation{}, errors.Wrap(resource.Ignore(redis.IsErrorNotFound, err), errDescribeFailed)
@@ -301,7 +301,7 @@ func (e *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalCreation{}, errors.Wrap(err, errStatusUpdate)
 	}
 
-	instance, pw, err := e.redisClient.CreateDBInstance(cr.GetObjectMeta().GetName(), &cr.Spec.ForProvider)
+	instance, pw, err := e.redisClient.CreateInstance(cr.GetObjectMeta().GetName(), &cr.Spec.ForProvider)
 	if err != nil {
 		return managed.ExternalCreation{}, errors.Wrap(err, errCreateFailed)
 	}
@@ -324,7 +324,7 @@ func (e *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 	modifyReq := &redis.ModifyRedisInstanceRequest{
 		InstanceClass: description.InstanceClass,
 	}
-	err := e.redisClient.Update(meta.GetExternalName(cr), modifyReq)
+	err := e.redisClient.UpdateInstance(meta.GetExternalName(cr), modifyReq)
 
 	return managed.ExternalUpdate{}, err
 }
@@ -337,11 +337,11 @@ func (e *external) Delete(ctx context.Context, mg resource.Managed) error {
 
 	cr.SetConditions(xpv1.Deleting())
 
-	err := e.redisClient.DeleteDBInstance(meta.GetExternalName(cr))
+	err := e.redisClient.DeleteInstance(meta.GetExternalName(cr))
 	return errors.Wrap(resource.Ignore(redis.IsErrorNotFound, err), errDeleteFailed)
 }
 
-func getConnectionDetails(password string, instance *redis.DBInstance) managed.ConnectionDetails {
+func getConnectionDetails(password string, instance *redis.Instance) managed.ConnectionDetails {
 	cd := managed.ConnectionDetails{}
 
 	// By default, a master user will be created with the instanceId

@@ -348,9 +348,6 @@ type RedisInstanceObservation struct {
 	// DBInstanceStatus specifies the current state of this database.
 	DBInstanceStatus string `json:"dbInstanceStatus,omitempty"`
 
-	// AccountReady specifies whether the initial user account (username + password) is ready
-	AccountReady bool `json:"accountReady"`
-
 	// ConnectionReady specifies whether the network connect is ready
 	ConnectionReady bool `json:"connectionReady"`
 
