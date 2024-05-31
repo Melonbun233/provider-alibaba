@@ -37,6 +37,7 @@ const (
 
 	// Errors
 	errInstanceNotFound       = "DBInstanceNotFound"
+	errInstanceNotFoundCode   = "InvalidInstanceId.NotFound"
 	errDescribeInstanceFailed = "cannot describe instance attributes"
 	errGeneratePasswordFailed = "cannot generate a password"
 )
@@ -52,24 +53,10 @@ type CleanedServerError struct {
 
 // Client defines Redis client operations
 type Client interface {
-	DescribeInstance(id string) (*aliredis.DBInstanceAttribute, error)
-	CreateInstance(name string, parameters *v1alpha1.RedisInstanceParameters) (*CreateInstanceResponse, error)
+	DescribeInstance(id string) (*aliredis.DBInstanceAttribute, *RedisConnection, error)
+	CreateInstance(name string, parameters *v1alpha1.RedisInstanceParameters) (*aliredis.CreateInstanceResponse, *RedisConnection, error)
 	DeleteInstance(id string) error
-	// AllocateInstancePublicConnection(id string, port int) (string, error)
-	// ModifyDBInstanceConnectionString(id string, port int) (string, error)
 	UpdateInstance(id string, req *ModifyRedisInstanceRequest) error
-}
-
-// DBInstance defines the instance information
-type CreateInstanceResponse struct {
-	// Instance ID
-	Id string
-
-	// Default password for the admin user
-	Password string
-
-	// Endpoint specifies the connection endpoint.
-	Endpoint *v1alpha1.Endpoint
 }
 
 // ModifyRedisInstanceRequest defines the request info to modify DB Instance
@@ -79,6 +66,13 @@ type ModifyRedisInstanceRequest struct {
 
 type client struct {
 	redisCli *aliredis.Client
+}
+
+type RedisConnection struct {
+	Username         string
+	Password         string
+	ConnectionDomain string
+	Port             string
 }
 
 // NewClient creates new Redis RedisClient
@@ -91,7 +85,7 @@ func NewClient(ctx context.Context, accessKeyID, accessKeySecret, region string)
 	return c, nil
 }
 
-func (c *client) DescribeInstance(id string) (*aliredis.DBInstanceAttribute, error) {
+func (c *client) DescribeInstance(id string) (*aliredis.DBInstanceAttribute, *RedisConnection, error) {
 	request := aliredis.CreateDescribeInstanceAttributeRequest()
 	request.Scheme = HTTPSScheme
 
@@ -99,18 +93,23 @@ func (c *client) DescribeInstance(id string) (*aliredis.DBInstanceAttribute, err
 
 	response, err := c.redisCli.DescribeInstanceAttribute(request)
 	if err != nil {
-		return nil, errors.Wrap(CleanError(err), errDescribeInstanceFailed)
+		return nil, nil, errors.Wrap(CleanError(err), errDescribeInstanceFailed)
 	}
 	if len(response.Instances.DBInstanceAttribute) == 0 {
-		return nil, errors.New(errInstanceNotFound)
+		return nil, nil, errors.New(errInstanceNotFound)
 	}
 
 	attr := response.Instances.DBInstanceAttribute[0]
 
-	return &attr, nil
+	conn := &RedisConnection{
+		ConnectionDomain: attr.ConnectionDomain,
+		Port:             strconv.FormatInt(attr.Port, 10),
+	}
+
+	return &attr, conn, nil
 }
 
-func (c *client) CreateInstance(externalName string, p *v1alpha1.RedisInstanceParameters) (*CreateInstanceResponse, error) {
+func (c *client) CreateInstance(externalName string, p *v1alpha1.RedisInstanceParameters) (*aliredis.CreateInstanceResponse, *RedisConnection, error) {
 	request := aliredis.CreateCreateInstanceRequest()
 
 	// Seems regionID will be by default from the first part ZoneID
@@ -169,7 +168,7 @@ func (c *client) CreateInstance(externalName string, p *v1alpha1.RedisInstancePa
 	if p.Password == "" {
 		pw, err = password.Generate()
 		if err != nil {
-			return nil, errors.Wrap(err, errGeneratePasswordFailed)
+			return nil, nil, errors.Wrap(err, errGeneratePasswordFailed)
 		}
 	}
 	request.Password = pw
@@ -182,17 +181,17 @@ func (c *client) CreateInstance(externalName string, p *v1alpha1.RedisInstancePa
 
 	resp, err := c.redisCli.CreateInstance(request)
 	if err != nil {
-		return nil, CleanError(err)
+		return nil, nil, CleanError(err)
 	}
 
-	return &CreateInstanceResponse{
-		Id:       resp.InstanceId,
-		Password: pw,
-		Endpoint: &v1alpha1.Endpoint{
-			Address: resp.ConnectionDomain,
-			Port:    strconv.Itoa(resp.Port),
-		},
-	}, nil
+	conn := &RedisConnection{
+		Username:         resp.InstanceId, // By default user name will be the instance Id
+		Password:         pw,
+		ConnectionDomain: resp.ConnectionDomain,
+		Port:             strconv.Itoa(resp.Port),
+	}
+
+	return resp, conn, nil
 }
 
 func (c *client) DeleteInstance(id string) error {
@@ -209,11 +208,9 @@ func (c *client) DeleteInstance(id string) error {
 // redis.DBInstance.
 func GenerateObservation(attr *aliredis.DBInstanceAttribute) v1alpha1.RedisInstanceObservation {
 	return v1alpha1.RedisInstanceObservation{
-		DBInstanceStatus: attr.InstanceStatus,
-		Endpoint: v1alpha1.Endpoint{
-			Address: attr.ConnectionDomain,
-			Port:    strconv.FormatInt(attr.Port, 10),
-		},
+		InstanceStatus:   attr.InstanceStatus,
+		ConnectionDomain: attr.ConnectionDomain,
+		Port:             strconv.FormatInt(attr.Port, 10),
 	}
 }
 
@@ -228,36 +225,8 @@ func IsErrorNotFound(err error) bool {
 		return false || errors.Is(err, errors.New(errInstanceNotFound))
 	}
 
-	return srverr.ErrorCode() == "InvalidInstanceId.NotFound"
+	return srverr.ErrorCode() == errInstanceNotFoundCode
 }
-
-// func (c *client) AllocateInstancePublicConnection(id string, port int) (string, error) {
-// 	request := aliredis.CreateAllocateInstancePublicConnectionRequest()
-// 	request.Scheme = HTTPSScheme
-// 	request.InstanceId = id
-// 	request.ConnectionStringPrefix = id + PubilConnectionDomain
-// 	request.Port = strconv.Itoa(port)
-// 	request.ReadTimeout = DefaultReadTime
-// 	_, err := c.redisCli.AllocateInstancePublicConnection(request)
-// 	if err != nil {
-// 		return "", CleanError(err)
-// 	}
-// 	return request.ConnectionStringPrefix, err
-// }
-
-// func (c *client) ModifyDBInstanceConnectionString(id string, port int) (string, error) {
-// 	request := aliredis.CreateModifyDBInstanceConnectionStringRequest()
-// 	request.Scheme = HTTPSScheme
-// 	request.DBInstanceId = id
-// 	request.CurrentConnectionString = id + PubilConnectionDomain
-// 	request.Port = strconv.Itoa(port)
-// 	request.ReadTimeout = DefaultReadTime
-// 	_, err := c.redisCli.ModifyDBInstanceConnectionString(request)
-// 	if err != nil {
-// 		return "", CleanError(err)
-// 	}
-// 	return request.CurrentConnectionString, err
-// }
 
 func (c *client) UpdateInstance(id string, req *ModifyRedisInstanceRequest) error {
 	if req.InstanceClass == "" {

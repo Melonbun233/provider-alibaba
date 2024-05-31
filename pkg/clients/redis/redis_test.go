@@ -17,14 +17,14 @@ func TestGenerateObservation(t *testing.T) {
 		ConnectionDomain: "test-address",
 		Port:             8080,
 	})
-	if ob.DBInstanceStatus != v1alpha1.RedisInstanceStateRunning {
-		t.Errorf("RedisInstanceStatus: want=%v, get=%v", v1alpha1.RedisInstanceStateRunning, ob.DBInstanceStatus)
+	if ob.InstanceStatus != v1alpha1.RedisInstanceStateRunning {
+		t.Errorf("RedisInstanceStatus: want=%v, get=%v", v1alpha1.RedisInstanceStateRunning, ob.InstanceStatus)
 	}
 }
 
 func TestIsErrorNotFound(t *testing.T) {
 	var response = make(map[string]string)
-	response["Code"] = "InvalidInstanceId.NotFound"
+	response["Code"] = errInstanceNotFoundCode
 
 	responseContent, _ := json.Marshal(response) //nolint:errchkjson
 	err := errors.NewServerError(404, string(responseContent), "comment")

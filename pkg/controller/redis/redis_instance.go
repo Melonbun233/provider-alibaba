@@ -19,7 +19,6 @@ package redis
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"time"
 
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
@@ -168,15 +167,15 @@ func (e *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		}, nil
 	}
 
-	attr, err := e.redisClient.DescribeInstance(instanceId)
+	resp, conn, err := e.redisClient.DescribeInstance(instanceId)
 	if err != nil {
 		fmt.Print(err.Error(), resource.Ignore(redis.IsErrorNotFound, err))
 		return managed.ExternalObservation{}, errors.Wrap(resource.Ignore(redis.IsErrorNotFound, err), errDescribeFailed)
 	}
 
-	cr.Status.AtProvider = redis.GenerateObservation(attr)
+	cr.Status.AtProvider = redis.GenerateObservation(resp)
 
-	switch cr.Status.AtProvider.DBInstanceStatus {
+	switch cr.Status.AtProvider.InstanceStatus {
 	case v1alpha1.RedisInstanceStateRunning:
 		cr.Status.SetConditions(xpv1.Available())
 	case v1alpha1.RedisInstanceStateCreating:
@@ -190,106 +189,9 @@ func (e *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	return managed.ExternalObservation{
 		ResourceExists:    true,
 		ResourceUpToDate:  true,
-		ConnectionDetails: getConnectionDetails("", "", &v1alpha1.Endpoint{Address: attr.ConnectionDomain, Port: strconv.FormatInt(attr.Port, 10)}),
+		ConnectionDetails: getConnectionDetails(conn),
 	}, nil
 }
-
-// Henry: No need to support for public access
-// We don't need to call this method as the port and address are automatically configured now
-// func (e *external) createConnectionIfNeeded(cr *v1alpha1.RedisInstance) (string, string, error) {
-
-// 	if cr.Spec.ForProvider.PubliclyAccessible {
-// 		return e.createPublicConnectionIfNeeded(cr)
-// 	}
-// 	return e.createPrivateConnectionIfNeeded(cr)
-// }
-
-// func (e *external) createPrivateConnectionIfNeeded(cr *v1alpha1.RedisInstance) (string, string, error) {
-// 	domain := cr.Status.AtProvider.DBInstanceID + ".redis.rds.aliyuncs.com"
-// 	if cr.Spec.ForProvider.Port == 0 {
-// 		return domain, defaultRedisPort, nil
-// 	}
-// 	port := strconv.Itoa(cr.Spec.ForProvider.Port)
-// 	if cr.Status.AtProvider.ConnectionReady {
-// 		return domain, port, nil
-// 	}
-// 	connectionDomain, err := e.client.ModifyDBInstanceConnectionString(cr.Status.AtProvider.DBInstanceID, cr.Spec.ForProvider.Port)
-// 	if err != nil {
-// 		// The previous request might fail due to timeout. That's fine we will eventually reconcile it.
-// 		var sdkerr sdkerror.Error
-// 		if errors.As(err, &sdkerr) {
-// 			if sdkerr.ErrorCode() == errDuplicateConnectionPort {
-// 				cr.Status.AtProvider.ConnectionReady = true
-// 				return domain, port, nil
-// 			}
-// 		}
-// 		return "", "", err
-// 	}
-
-// 	cr.Status.AtProvider.ConnectionReady = true
-// 	return connectionDomain, port, nil
-// }
-
-// func (e *external) createPublicConnectionIfNeeded(cr *v1alpha1.RedisInstance) (string, string, error) {
-// 	domain := cr.Status.AtProvider.DBInstanceID + redis.PubilConnectionDomain
-// 	if cr.Status.AtProvider.ConnectionReady {
-// 		return domain, "", nil
-// 	}
-// 	port := defaultRedisPort
-// 	if cr.Spec.ForProvider.InstancePort != 0 {
-// 		port = strconv.Itoa(cr.Spec.ForProvider.InstancePort)
-// 	}
-// 	_, err := e.client.AllocateInstancePublicConnection(cr.Status.AtProvider.DBInstanceID, cr.Spec.ForProvider.InstancePort)
-// 	if err != nil {
-// 		// The previous request might fail due to timeout. That's fine we will eventually reconcile it.
-// 		var sdkerr sdkerror.Error
-// 		if errors.As(err, &sdkerr) {
-// 			if sdkerr.ErrorCode() == errDuplicateConnectionPort || sdkerr.ErrorCode() == "NetTypeExists" {
-// 				cr.Status.AtProvider.ConnectionReady = true
-// 				return domain, port, nil
-// 			}
-// 		}
-// 		return "", "", err
-// 	}
-
-// 	cr.Status.AtProvider.ConnectionReady = true
-// 	return domain, port, nil
-// }
-
-// func (e *external) createAccount(cr *v1alpha1.RedisInstance) (string, error) {
-// 	if cr.Status.AtProvider.AccountReady {
-// 		return "", nil
-// 	}
-
-// 	pw, err := password.Generate()
-// 	if err != nil {
-// 		return "", err
-// 	}
-
-// 	instanceId, err := getInstanceId(cr)
-// 	if err != nil {
-// 		return "", err
-// 	}
-
-// 	username := getUsername(cr)
-
-// 	// Use the instance name as the default user
-// 	err = e.client.CreateAccount(instanceId, username, pw)
-// 	if err != nil {
-// 		// The previous request might fail due to timeout. That's fine we will eventually reconcile it.
-// 		var sdkerr sdkerror.Error
-// 		if errors.As(err, &sdkerr) {
-// 			if sdkerr.ErrorCode() == errAccountNameDuplicate {
-// 				cr.Status.AtProvider.AccountReady = true
-// 				return "", nil
-// 			}
-// 		}
-// 		return "", err
-// 	}
-
-// 	cr.Status.AtProvider.AccountReady = true
-// 	return pw, nil
-// }
 
 func (e *external) Create(ctx context.Context, mg resource.Managed) (managed.ExternalCreation, error) {
 	cr, ok := mg.(*v1alpha1.RedisInstance)
@@ -302,15 +204,15 @@ func (e *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalCreation{}, errors.Wrap(err, errStatusUpdate)
 	}
 
-	resp, err := e.redisClient.CreateInstance(cr.GetObjectMeta().GetName(), &cr.Spec.ForProvider)
+	resp, conn, err := e.redisClient.CreateInstance(cr.GetObjectMeta().GetName(), &cr.Spec.ForProvider)
 	if err != nil {
 		return managed.ExternalCreation{}, errors.Wrap(err, errCreateFailed)
 	}
 
-	meta.SetExternalName(cr, resp.Id)
+	meta.SetExternalName(cr, resp.InstanceId)
 
 	// Any connection details emitted in ExternalClient are cumulative.
-	return managed.ExternalCreation{ConnectionDetails: getConnectionDetails(resp.Id, resp.Password, resp.Endpoint)}, nil
+	return managed.ExternalCreation{ConnectionDetails: getConnectionDetails(conn)}, nil
 }
 
 func (e *external) Update(ctx context.Context, mg resource.Managed) (managed.ExternalUpdate, error) {
@@ -342,27 +244,23 @@ func (e *external) Delete(ctx context.Context, mg resource.Managed) error {
 	return errors.Wrap(resource.Ignore(redis.IsErrorNotFound, err), errDeleteFailed)
 }
 
-func getConnectionDetails(id string, password string, endpoint *v1alpha1.Endpoint) managed.ConnectionDetails {
+func getConnectionDetails(c *redis.RedisConnection) managed.ConnectionDetails {
 	cd := managed.ConnectionDetails{}
 
-	// By default, a master user will be created with the instanceId
-	username := id
-
-	if username != "" {
-		cd[xpv1.ResourceCredentialsSecretUserKey] = []byte(username)
+	if c.Username != "" {
+		cd[xpv1.ResourceCredentialsSecretUserKey] = []byte(c.Username)
 	}
 
-	if password != "" {
-		cd[xpv1.ResourceCredentialsSecretPasswordKey] = []byte(password)
+	if c.Password != "" {
+		cd[xpv1.ResourceCredentialsSecretPasswordKey] = []byte(c.Password)
 	}
 
-	if endpoint != nil {
-		if endpoint.Address != "" {
-			cd[xpv1.ResourceCredentialsSecretEndpointKey] = []byte(endpoint.Address)
-		}
-		if endpoint.Port != "" {
-			cd[xpv1.ResourceCredentialsSecretPortKey] = []byte(endpoint.Port)
-		}
+	if c.ConnectionDomain != "" {
+		cd[xpv1.ResourceCredentialsSecretEndpointKey] = []byte(c.ConnectionDomain)
+	}
+
+	if c.Port != "" {
+		cd[xpv1.ResourceCredentialsSecretPortKey] = []byte(c.Port)
 	}
 
 	return cd

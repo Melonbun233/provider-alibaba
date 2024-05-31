@@ -26,7 +26,7 @@ spec:
     - jsonPath: .status.conditions[?(@.type=='Synced')].status
       name: SYNCED
       type: string
-    - jsonPath: .status.atProvider.dbInstanceStatus
+    - jsonPath: .status.atProvider.InstanceStatus
       name: STATE
       type: string
     - jsonPath: .spec.forProvider.instanceType
@@ -335,30 +335,22 @@ spec:
                 description: RedisInstanceObservation is the representation of the
                   current state that is observed.
                 properties:
+                  InstanceStatus:
+                    description: InstanceStatus specifies the current state of this
+                      database.
+                    type: string
+                  connectionDomain:
+                    description: ConnectionDomain contains domain name used to connect
+                      with the Redis instance
+                    type: string
                   connectionReady:
                     description: ConnectionReady specifies whether the network connect
                       is ready
                     type: boolean
-                  dbInstanceStatus:
-                    description: DBInstanceStatus specifies the current state of this
-                      database.
+                  port:
+                    description: Port contains the port number used to connect with
+                      the Redis instance
                     type: string
-                  endpoint:
-                    description: Endpoint contains address and port used to connect
-                      with the Redis instance
-                    properties:
-                      address:
-                        description: Address specifies the DNS address of the Redis
-                          instance.
-                        type: string
-                      port:
-                        description: Port specifies the port that the database engine
-                          is listening on.
-                        type: string
-                    type: object
-                required:
-                - connectionReady
-                - endpoint
                 type: object
               conditions:
                 description: Conditions of the resource.

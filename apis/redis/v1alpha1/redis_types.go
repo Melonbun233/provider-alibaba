@@ -27,7 +27,7 @@ import (
 // An RedisInstance is a managed resource that represents an Redis instance.
 // +kubebuilder:printcolumn:name="READY",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="SYNCED",type="string",JSONPath=".status.conditions[?(@.type=='Synced')].status"
-// +kubebuilder:printcolumn:name="STATE",type="string",JSONPath=".status.atProvider.dbInstanceStatus"
+// +kubebuilder:printcolumn:name="STATE",type="string",JSONPath=".status.atProvider.InstanceStatus"
 // +kubebuilder:printcolumn:name="INSTANCE_TYPE",type="string",JSONPath=".spec.forProvider.instanceType"
 // +kubebuilder:printcolumn:name="VERSION",type="string",JSONPath=".spec.forProvider.engineVersion"
 // +kubebuilder:printcolumn:name="AGE",type="date",JSONPath=".metadata.creationTimestamp"
@@ -345,21 +345,15 @@ type RedisInstanceParameters struct {
 
 // RedisInstanceObservation is the representation of the current state that is observed.
 type RedisInstanceObservation struct {
-	// DBInstanceStatus specifies the current state of this database.
-	DBInstanceStatus string `json:"dbInstanceStatus,omitempty"`
+	// InstanceStatus specifies the current state of this database.
+	InstanceStatus string `json:"InstanceStatus,omitempty"`
 
 	// ConnectionReady specifies whether the network connect is ready
-	ConnectionReady bool `json:"connectionReady"`
+	ConnectionReady bool `json:"connectionReady,omitempty"`
 
-	// Endpoint contains address and port used to connect with the Redis instance
-	Endpoint Endpoint `json:"endpoint"`
-}
+	// ConnectionDomain contains domain name used to connect with the Redis instance
+	ConnectionDomain string `json:"connectionDomain,omitempty"`
 
-// Endpoint is the redis endpoint
-type Endpoint struct {
-	// Address specifies the DNS address of the Redis instance.
-	Address string `json:"address,omitempty"`
-
-	// Port specifies the port that the database engine is listening on.
+	// Port contains the port number used to connect with the Redis instance
 	Port string `json:"port,omitempty"`
 }

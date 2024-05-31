@@ -31,7 +31,6 @@ const testPort = "8080"
 const testAddress = "172.0.0.1"
 
 var testPortInt = 8080
-var testEndpoint = v1alpha1.Endpoint{Address: testAddress, Port: testPort}
 
 func TestConnector(t *testing.T) {
 	errBoom := errors.New("boom")
@@ -286,8 +285,9 @@ func TestObserve(t *testing.T) {
 				},
 				Status: v1alpha1.RedisInstanceStatus{
 					AtProvider: v1alpha1.RedisInstanceObservation{
-						DBInstanceStatus: testStatus,
-						Endpoint:         testEndpoint,
+						InstanceStatus:   testStatus,
+						ConnectionDomain: testAddress,
+						Port:             testPort,
 					},
 				},
 			},
@@ -310,8 +310,9 @@ func TestObserve(t *testing.T) {
 				},
 				Status: v1alpha1.RedisInstanceStatus{
 					AtProvider: v1alpha1.RedisInstanceObservation{
-						DBInstanceStatus: testStatus,
-						Endpoint:         testEndpoint,
+						InstanceStatus:   testStatus,
+						ConnectionDomain: testAddress,
+						Port:             testPort,
 					},
 				},
 			},
@@ -372,6 +373,7 @@ func TestCreate(t *testing.T) {
 						EngineVersion: "5.0",
 						InstanceClass: "redis.logic.sharding.2g.8db.0rodb.8proxy.default",
 						Port:          &testPortInt,
+						Password:      testPassword,
 						// PubliclyAccessible: true,
 					},
 				},
@@ -473,8 +475,9 @@ func TestDelete(t *testing.T) {
 				},
 				Status: v1alpha1.RedisInstanceStatus{
 					AtProvider: v1alpha1.RedisInstanceObservation{
-						DBInstanceStatus: v1alpha1.RedisInstanceStateDeleting,
-						Endpoint:         testEndpoint,
+						InstanceStatus:   v1alpha1.RedisInstanceStateDeleting,
+						ConnectionDomain: testAddress,
+						Port:             testPort,
 					},
 				},
 			},
@@ -489,8 +492,9 @@ func TestDelete(t *testing.T) {
 				},
 				Status: v1alpha1.RedisInstanceStatus{
 					AtProvider: v1alpha1.RedisInstanceObservation{
-						DBInstanceStatus: testStatus,
-						Endpoint:         testEndpoint,
+						InstanceStatus:   testStatus,
+						ConnectionDomain: testAddress,
+						Port:             testPort,
 					},
 				},
 			},
@@ -511,15 +515,15 @@ func TestDelete(t *testing.T) {
 }
 
 func TestGetConnectionDetails(t *testing.T) {
-	address := testEndpoint.Address
-	port := testEndpoint.Port
+	address := testAddress
+	port := testPort
 	password := testPassword
 
 	type args struct {
-		id       string
-		pw       string
-		cr       *v1alpha1.RedisInstance
-		endpoint *v1alpha1.Endpoint
+		id     string
+		pw     string
+		domain string
+		port   string
 	}
 	type want struct {
 		conn managed.ConnectionDetails
@@ -531,12 +535,10 @@ func TestGetConnectionDetails(t *testing.T) {
 	}{
 		"SuccessfulNoPassword": {
 			args: args{
-				id: testId,
-				pw: "",
-				endpoint: &v1alpha1.Endpoint{
-					Address: address,
-					Port:    port,
-				},
+				id:     testId,
+				pw:     "",
+				domain: address,
+				port:   port,
 			},
 			want: want{
 				conn: managed.ConnectionDetails{
@@ -560,12 +562,10 @@ func TestGetConnectionDetails(t *testing.T) {
 		},
 		"Successful": {
 			args: args{
-				id: testId,
-				pw: password,
-				endpoint: &v1alpha1.Endpoint{
-					Address: address,
-					Port:    port,
-				},
+				id:     testId,
+				pw:     password,
+				domain: address,
+				port:   port,
 			},
 			want: want{
 				conn: managed.ConnectionDetails{
@@ -580,7 +580,12 @@ func TestGetConnectionDetails(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			conn := getConnectionDetails(tc.args.id, tc.args.pw, tc.args.endpoint)
+			conn := getConnectionDetails(&redis.RedisConnection{
+				Username:         tc.args.id,
+				Password:         tc.args.pw,
+				ConnectionDomain: tc.args.domain,
+				Port:             tc.args.port,
+			})
 			if diff := cmp.Diff(tc.want.conn, conn); diff != "" {
 				t.Errorf("getConnectionDetails(...): -want, +got:\n%s", diff)
 			}
@@ -590,30 +595,36 @@ func TestGetConnectionDetails(t *testing.T) {
 
 type fakeRedisClient struct{}
 
-func (c *fakeRedisClient) DescribeInstance(id string) (*aliredis.DBInstanceAttribute, error) {
+func (c *fakeRedisClient) DescribeInstance(id string) (*aliredis.DBInstanceAttribute, *redis.RedisConnection, error) {
 	if id != testId {
-		return nil, errors.New("DescribeRedisInstance: client doesn't work")
+		return nil, nil, errors.New("DescribeRedisInstance: client doesn't work")
 	}
 	return &aliredis.DBInstanceAttribute{
-		InstanceId:       id,
-		InstanceStatus:   v1alpha1.RedisInstanceStateRunning,
-		ConnectionDomain: testAddress,
-		Port:             int64(testPortInt),
-	}, nil
+			InstanceId:       id,
+			InstanceStatus:   v1alpha1.RedisInstanceStateRunning,
+			ConnectionDomain: testAddress,
+			Port:             int64(testPortInt),
+		}, &redis.RedisConnection{
+			ConnectionDomain: testAddress,
+			Port:             testPort,
+		}, nil
 }
 
-func (c *fakeRedisClient) CreateInstance(instanceName string, p *v1alpha1.RedisInstanceParameters) (*redis.CreateInstanceResponse, error) {
+func (c *fakeRedisClient) CreateInstance(instanceName string, p *v1alpha1.RedisInstanceParameters) (*aliredis.CreateInstanceResponse, *redis.RedisConnection, error) {
 	if instanceName != testName {
-		return nil, errors.New("CreateRedisInstance: client doesn't work")
+		return nil, nil, errors.New("CreateRedisInstance: client doesn't work")
 	}
-	return &redis.CreateInstanceResponse{
-		Id:       testId,
-		Password: testPassword,
-		Endpoint: &v1alpha1.Endpoint{
-			Address: testAddress,
-			Port:    testPort,
-		},
-	}, nil
+	return &aliredis.CreateInstanceResponse{
+			InstanceId:       testId,
+			InstanceName:     instanceName,
+			ConnectionDomain: testAddress,
+			Port:             *p.Port,
+		}, &redis.RedisConnection{
+			Username:         testId,
+			Password:         p.Password,
+			ConnectionDomain: testAddress,
+			Port:             strconv.Itoa(*p.Port),
+		}, nil
 }
 
 func (c *fakeRedisClient) DeleteInstance(id string) error {
