@@ -18,7 +18,6 @@ package redis
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
@@ -169,7 +168,6 @@ func (e *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 
 	resp, conn, err := e.redisClient.DescribeInstance(instanceId)
 	if err != nil {
-		fmt.Print(err.Error(), resource.Ignore(redis.IsErrorNotFound, err))
 		return managed.ExternalObservation{}, errors.Wrap(resource.Ignore(redis.IsErrorNotFound, err), errDescribeFailed)
 	}
 
@@ -186,9 +184,19 @@ func (e *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		cr.Status.SetConditions(xpv1.Unavailable())
 	}
 
+	// TODO: Check for Spec update
+
+	// TODO: Check for parameter update
+
+	// Check for whitelist IPs update
+	var securityIpsNeedUpdate bool
+	if cr.Status.AtProvider.InstanceStatus == v1alpha1.RedisInstanceStateRunning {
+		securityIpsNeedUpdate = redis.SecurityIpsNeedUpdate(resp.SecurityIPList, cr.Spec.ForProvider.SecurityIps)
+	}
+
 	return managed.ExternalObservation{
 		ResourceExists:    true,
-		ResourceUpToDate:  true,
+		ResourceUpToDate:  !securityIpsNeedUpdate,
 		ConnectionDetails: getConnectionDetails(conn),
 	}, nil
 }
@@ -221,15 +229,33 @@ func (e *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalUpdate{}, errors.New(errNotInstance)
 	}
 
-	cr.Status.SetConditions(xpv1.Creating())
+	instanceId := meta.GetExternalName(cr)
 
-	description := cr.Spec.ForProvider
-	modifyReq := &redis.ModifyRedisInstanceRequest{
-		InstanceClass: description.InstanceClass,
+	resp, _, err := e.redisClient.DescribeInstance(instanceId)
+	if err != nil {
+		return managed.ExternalUpdate{}, err
 	}
-	err := e.redisClient.UpdateInstance(meta.GetExternalName(cr), modifyReq)
 
-	return managed.ExternalUpdate{}, err
+	// Only update the instance when it's in normal state
+	if resp.InstanceStatus != v1alpha1.RedisInstanceStateRunning {
+		return managed.ExternalUpdate{}, nil
+	}
+
+	// TODO: Check and update spec if needed
+
+	// TODO: Check and update parameters if needed
+
+	// Check and update security IPs if needed
+	if redis.SecurityIpsNeedUpdate(resp.SecurityIPList, cr.Spec.ForProvider.SecurityIps) {
+		err = e.redisClient.ModifySecurityIps(instanceId, cr.Spec.ForProvider.SecurityIps)
+		if err != nil {
+			return managed.ExternalUpdate{}, err
+		}
+
+		return managed.ExternalUpdate{}, nil
+	}
+
+	return managed.ExternalUpdate{}, nil
 }
 
 func (e *external) Delete(ctx context.Context, mg resource.Managed) error {

@@ -634,23 +634,16 @@ func (c *fakeRedisClient) DeleteInstance(id string) error {
 	return nil
 }
 
-// func (c *fakeRedisClient) AllocateInstancePublicConnection(id string, port int) (string, error) {
-// 	if id != testId {
-// 		return "nil", errors.New("AllocateInstancePublicConnection: client doesn't work")
-// 	}
-// 	return "", nil
-// }
-
-// func (c *fakeRedisClient) ModifyDBInstanceConnectionString(id string, port int) (string, error) {
-// 	if id != testId {
-// 		return "nil", errors.New("ModifyDBInstanceConnectionString: client doesn't work")
-// 	}
-// 	return "", nil
-// }
-
 func (c *fakeRedisClient) UpdateInstance(id string, req *redis.ModifyRedisInstanceRequest) error {
 	if id != testId {
 		return errors.New("Update: client doesn't work")
+	}
+	return nil
+}
+
+func (c *fakeRedisClient) ModifySecurityIps(id string, ips string) error {
+	if id != testId {
+		return errors.New("ModifySecurityIps: client doesn't work")
 	}
 	return nil
 }

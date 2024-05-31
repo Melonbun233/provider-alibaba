@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"strconv"
+	"time"
 
 	"github.com/crossplane/crossplane-runtime/pkg/password"
 	"github.com/pkg/errors"
@@ -33,10 +34,12 @@ import (
 
 const (
 	// HTTPSScheme indicates request scheme
-	HTTPSScheme = "https"
+	HTTPSScheme    = "https"
+	ConnectTimeOut = 60 * time.Second
+	ReadTimeOut    = 60 * time.Second
 
 	// Errors
-	errInstanceNotFound       = "DBInstanceNotFound"
+	errInstanceNotFound       = "InstanceNotFound"
 	errInstanceNotFoundCode   = "InvalidInstanceId.NotFound"
 	errDescribeInstanceFailed = "cannot describe instance attributes"
 	errGeneratePasswordFailed = "cannot generate a password"
@@ -57,6 +60,8 @@ type Client interface {
 	CreateInstance(name string, parameters *v1alpha1.RedisInstanceParameters) (*aliredis.CreateInstanceResponse, *RedisConnection, error)
 	DeleteInstance(id string) error
 	UpdateInstance(id string, req *ModifyRedisInstanceRequest) error
+
+	ModifySecurityIps(id string, ips string) error
 }
 
 // ModifyRedisInstanceRequest defines the request info to modify DB Instance
@@ -111,6 +116,8 @@ func (c *client) DescribeInstance(id string) (*aliredis.DBInstanceAttribute, *Re
 
 func (c *client) CreateInstance(externalName string, p *v1alpha1.RedisInstanceParameters) (*aliredis.CreateInstanceResponse, *RedisConnection, error) {
 	request := aliredis.CreateCreateInstanceRequest()
+	request.ConnectTimeout = ConnectTimeOut
+	request.ReadTimeout = ReadTimeOut
 
 	// Seems regionID will be by default from the first part ZoneID
 	// request.RegionID = p.RegionID

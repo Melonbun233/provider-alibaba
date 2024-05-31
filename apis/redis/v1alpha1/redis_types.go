@@ -341,15 +341,17 @@ type RedisInstanceParameters struct {
 	// The backup set ID.
 	// +optional
 	ClusterBackupId string `json:"clusterBackupId,omitempty"`
+
+	// A list of IP addresses should be whitelisted.
+	// Separate multiple IP addresses with a comma (,).
+	// +optional
+	SecurityIps string `json:"securityIps,omitempty"`
 }
 
 // RedisInstanceObservation is the representation of the current state that is observed.
 type RedisInstanceObservation struct {
 	// InstanceStatus specifies the current state of this database.
 	InstanceStatus string `json:"InstanceStatus,omitempty"`
-
-	// ConnectionReady specifies whether the network connect is ready
-	ConnectionReady bool `json:"connectionReady,omitempty"`
 
 	// ConnectionDomain contains domain name used to connect with the Redis instance
 	ConnectionDomain string `json:"connectionDomain,omitempty"`

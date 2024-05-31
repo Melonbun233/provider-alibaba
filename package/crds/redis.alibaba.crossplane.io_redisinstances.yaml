@@ -241,6 +241,10 @@ spec:
                       recovery is implemented across zones. The instance can withstand
                       failures in data centers.'
                     type: string
+                  securityIps:
+                    description: A list of IP addresses should be whitelisted. Separate
+                      multiple IP addresses with a comma (,).
+                    type: string
                   shardCount:
                     description: The number of data shards. This parameter is available
                       only if you create a cluster instance that uses cloud disks.
@@ -343,10 +347,6 @@ spec:
                     description: ConnectionDomain contains domain name used to connect
                       with the Redis instance
                     type: string
-                  connectionReady:
-                    description: ConnectionReady specifies whether the network connect
-                      is ready
-                    type: boolean
                   port:
                     description: Port contains the port number used to connect with
                       the Redis instance
