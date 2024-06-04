@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/crossplane/crossplane-runtime/pkg/password"
@@ -34,9 +35,15 @@ import (
 
 const (
 	// HTTPSScheme indicates request scheme
-	HTTPSScheme    = "https"
-	ConnectTimeOut = 60 * time.Second
-	ReadTimeOut    = 60 * time.Second
+	HTTPSScheme         = "https"
+	ConnectTimeOut      = 60 * time.Second
+	ReadTimeOut         = 60 * time.Second
+	DefaultIPModifyMode = "Cover"
+
+	// Effective time for Spec update
+	EffectiveTimeImmediate = "Immediately"
+	EffectiveTimeMaintain  = "MaintainTime"
+	DefaultEffectiveTime   = "Immediately"
 
 	// Errors
 	errInstanceNotFound       = "InstanceNotFound"
@@ -59,8 +66,8 @@ type Client interface {
 	DescribeInstance(id string) (*aliredis.DBInstanceAttribute, *RedisConnection, error)
 	CreateInstance(name string, parameters *v1alpha1.RedisInstanceParameters) (*aliredis.CreateInstanceResponse, *RedisConnection, error)
 	DeleteInstance(id string) error
-	UpdateInstance(id string, req *ModifyRedisInstanceRequest) error
 
+	ModifyInstanceSpec(id string, req *aliredis.ModifyInstanceSpecRequest) error
 	ModifySecurityIps(id string, ips string) error
 }
 
@@ -251,6 +258,77 @@ func (c *client) modifyInstanceSpec(id string, req *ModifyRedisInstanceRequest) 
 	request.InstanceId = id
 	request.InstanceClass = req.InstanceClass
 	_, err := c.redisCli.ModifyInstanceSpec(request)
+	return CleanError(err)
+}
+
+// Check if the whitelist IPs (IPv4) in Redis parameters are different than what are actually configured
+// Return true if there are differences
+func SecurityIpsNeedUpdate(attr *aliredis.DBInstanceAttribute, p *v1alpha1.RedisInstanceParameters) bool {
+	if p.SecurityIps == "" {
+		return false
+	}
+
+	ips := strings.Split(attr.SecurityIPList, ",")
+	for _, ip := range ips {
+		if !strings.Contains(p.SecurityIps, ip) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// Send Modify IP request
+func (c *client) ModifySecurityIps(id string, ips string) error {
+	req := aliredis.CreateModifySecurityIpsRequest()
+
+	req.InstanceId = id
+	req.SecurityIps = ips
+	req.ModifyMode = DefaultIPModifyMode
+
+	_, err := c.redisCli.ModifySecurityIps(req)
+	return CleanError(err)
+}
+
+// Check if the Redis instance spec needs to be updated
+// Return nil if there is no difference, else return the modify instance spec request
+func SpecsNeedUpdate(attr *aliredis.DBInstanceAttribute, p *v1alpha1.RedisInstanceParameters) *aliredis.ModifyInstanceSpecRequest {
+	return calculateSpecDiff(attr, p)
+}
+
+// Calculate the difference between the resource spec and what's actually configured
+// Note that Major and Minor versions should be set by separate calls
+// Only support certain updates on specs, and we update the specs one by one to avoid conflicts
+func calculateSpecDiff(attr *aliredis.DBInstanceAttribute, p *v1alpha1.RedisInstanceParameters) *aliredis.ModifyInstanceSpecRequest {
+	diff := aliredis.CreateModifyInstanceSpecRequest()
+
+	// By default, effective time is "Immediately"
+	if p.EffectiveTime != "" {
+		diff.EffectiveTime = p.EffectiveTime
+	}
+
+	if attr.InstanceClass != p.InstanceClass {
+		diff.InstanceClass = p.InstanceClass
+		return diff
+	}
+
+	if p.ShardCount != nil && attr.ShardCount != *p.ShardCount {
+		diff.ShardCount = requests.NewInteger(*p.ShardCount)
+		return diff
+	}
+
+	if p.ReadOnlyCount != nil && attr.ReadOnlyCount != *p.ReadOnlyCount {
+		diff.ReadOnlyCount = requests.NewInteger(*p.ReadOnlyCount)
+		return diff
+	}
+
+	return nil
+}
+
+// Send Modify Spec request
+func (c *client) ModifyInstanceSpec(id string, req *aliredis.ModifyInstanceSpecRequest) error {
+	req.InstanceId = id
+	_, err := c.redisCli.ModifyInstanceSpec(req)
 	return CleanError(err)
 }
 

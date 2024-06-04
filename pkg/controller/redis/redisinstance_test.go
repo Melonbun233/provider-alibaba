@@ -647,3 +647,10 @@ func (c *fakeRedisClient) ModifySecurityIps(id string, ips string) error {
 	}
 	return nil
 }
+
+func (c *fakeRedisClient) ModifyInstanceSpec(id string, req *aliredis.ModifyInstanceSpecRequest) error {
+	if id != testId {
+		return errors.New("ModifyInstanceSpec: client doesn't work")
+	}
+	return nil
+}

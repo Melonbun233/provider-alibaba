@@ -130,6 +130,12 @@ spec:
                     description: The ID of the dedicated cluster. This parameter is
                       required if you create an instance in a dedicated cluster.
                     type: string
+                  effectiveTime:
+                    description: 'Effective time for Instance Updates Valid values:
+                      Immediately (default): The configurations are immediately changed
+                      MaintainTime: The configurations are changed within the maintenance
+                      window.'
+                    type: string
                   engineVersion:
                     description: 'The database engine version of the instance. Valid
                       values: 4.0 5.0 6.0 7.0'

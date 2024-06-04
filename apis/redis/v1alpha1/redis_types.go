@@ -346,6 +346,12 @@ type RedisInstanceParameters struct {
 	// Separate multiple IP addresses with a comma (,).
 	// +optional
 	SecurityIps string `json:"securityIps,omitempty"`
+
+	// Effective time for Instance Updates
+	// Valid values:
+	//		Immediately (default): The configurations are immediately changed
+	//		MaintainTime: The configurations are changed within the maintenance window.
+	EffectiveTime string `json:"effectiveTime,omitempty"`
 }
 
 // RedisInstanceObservation is the representation of the current state that is observed.

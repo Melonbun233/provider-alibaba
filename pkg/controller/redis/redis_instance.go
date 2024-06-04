@@ -42,16 +42,18 @@ const (
 	// Fall to connection instance error description
 	errCreateInstanceConnectionFailed = "cannot instance connection"
 
-	errNotInstance            = "managed resource is not an instance custom resource"
-	errNoProvider             = "no provider config or provider specified"
-	errCreateClient           = "cannot create redis client"
-	errGetProviderConfig      = "cannot get provider config"
-	errTrackUsage             = "cannot track provider config usage"
-	errNoConnectionSecret     = "no connection secret specified"
-	errGetConnectionSecret    = "cannot get connection secret"
-	errInstanceIdEmpty        = "instance id is empty, maybe it's not created"
-	errInstanceAlreadyCreated = "instance id is not empty, maybe it's already been created"
-	errStatusUpdate           = "failed to update CR status"
+	errNotInstance              = "managed resource is not an instance custom resource"
+	errNoProvider               = "no provider config or provider specified"
+	errCreateClient             = "cannot create redis client"
+	errGetProviderConfig        = "cannot get provider config"
+	errTrackUsage               = "cannot track provider config usage"
+	errNoConnectionSecret       = "no connection secret specified"
+	errGetConnectionSecret      = "cannot get connection secret"
+	errInstanceIdEmpty          = "instance id is empty, maybe it's not created"
+	errInstanceAlreadyCreated   = "instance id is not empty, maybe it's already been created"
+	errStatusUpdate             = "failed to update CR status"
+	errInstanceUpdateIPFailed   = "failed to update instance security IP list"
+	errInstanceUpdateSpecFailed = "failed to update instance spec"
 
 	errCreateFailed        = "cannot create redis instance"
 	errCreateAccountFailed = "cannot create redis account"
@@ -184,19 +186,21 @@ func (e *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		cr.Status.SetConditions(xpv1.Unavailable())
 	}
 
-	// TODO: Check for Spec update
-
-	// TODO: Check for parameter update
-
-	// Check for whitelist IPs update
 	var securityIpsNeedUpdate bool
+	var specsNeedUpdate bool
 	if cr.Status.AtProvider.InstanceStatus == v1alpha1.RedisInstanceStateRunning {
-		securityIpsNeedUpdate = redis.SecurityIpsNeedUpdate(resp.SecurityIPList, cr.Spec.ForProvider.SecurityIps)
+		// TODO: Check for Spec update
+
+		// TODO: Check for parameter update
+		specsNeedUpdate = redis.SpecsNeedUpdate(resp, &cr.Spec.ForProvider) != nil
+
+		// Check for whitelist IPs update
+		securityIpsNeedUpdate = redis.SecurityIpsNeedUpdate(resp, &cr.Spec.ForProvider)
 	}
 
 	return managed.ExternalObservation{
 		ResourceExists:    true,
-		ResourceUpToDate:  !securityIpsNeedUpdate,
+		ResourceUpToDate:  !securityIpsNeedUpdate && !specsNeedUpdate,
 		ConnectionDetails: getConnectionDetails(conn),
 	}, nil
 }
@@ -242,14 +246,22 @@ func (e *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 	}
 
 	// TODO: Check and update spec if needed
+	specsUpdateRequest := redis.SpecsNeedUpdate(resp, &cr.Spec.ForProvider)
+	if specsUpdateRequest != nil {
+		err = e.redisClient.ModifyInstanceSpec(instanceId, specsUpdateRequest)
+		if err != nil {
+			return managed.ExternalUpdate{}, errors.Wrap(err, errInstanceUpdateSpecFailed)
+		}
+		return managed.ExternalUpdate{}, nil
+	}
 
 	// TODO: Check and update parameters if needed
 
 	// Check and update security IPs if needed
-	if redis.SecurityIpsNeedUpdate(resp.SecurityIPList, cr.Spec.ForProvider.SecurityIps) {
+	if redis.SecurityIpsNeedUpdate(resp, &cr.Spec.ForProvider) {
 		err = e.redisClient.ModifySecurityIps(instanceId, cr.Spec.ForProvider.SecurityIps)
 		if err != nil {
-			return managed.ExternalUpdate{}, err
+			return managed.ExternalUpdate{}, errors.Wrap(err, errInstanceUpdateIPFailed)
 		}
 
 		return managed.ExternalUpdate{}, nil
