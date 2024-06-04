@@ -190,6 +190,12 @@ spec:
                     description: The parameter template ID, which must be globally
                       unique.
                     type: string
+                  parameterConfig:
+                    description: 'The instance parameter settings that you want to
+                      modify. Specify this parameter in the JSON format. The new value
+                      of a parameter overwrites the original value. Supported parameters
+                      can be found here: https://www.alibabacloud.com/help/en/redis/user-guide/supported-parameters'
+                    type: string
                   password:
                     description: 'The password that is used to connect to the instance.
                       The password must be 8 to 32 characters in length and must contain

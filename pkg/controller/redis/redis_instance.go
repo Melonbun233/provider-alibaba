@@ -42,18 +42,19 @@ const (
 	// Fall to connection instance error description
 	errCreateInstanceConnectionFailed = "cannot instance connection"
 
-	errNotInstance              = "managed resource is not an instance custom resource"
-	errNoProvider               = "no provider config or provider specified"
-	errCreateClient             = "cannot create redis client"
-	errGetProviderConfig        = "cannot get provider config"
-	errTrackUsage               = "cannot track provider config usage"
-	errNoConnectionSecret       = "no connection secret specified"
-	errGetConnectionSecret      = "cannot get connection secret"
-	errInstanceIdEmpty          = "instance id is empty, maybe it's not created"
-	errInstanceAlreadyCreated   = "instance id is not empty, maybe it's already been created"
-	errStatusUpdate             = "failed to update CR status"
-	errInstanceUpdateIPFailed   = "failed to update instance security IP list"
-	errInstanceUpdateSpecFailed = "failed to update instance spec"
+	errNotInstance               = "managed resource is not an instance custom resource"
+	errNoProvider                = "no provider config or provider specified"
+	errCreateClient              = "cannot create redis client"
+	errGetProviderConfig         = "cannot get provider config"
+	errTrackUsage                = "cannot track provider config usage"
+	errNoConnectionSecret        = "no connection secret specified"
+	errGetConnectionSecret       = "cannot get connection secret"
+	errInstanceIdEmpty           = "instance id is empty, maybe it's not created"
+	errInstanceAlreadyCreated    = "instance id is not empty, maybe it's already been created"
+	errStatusUpdate              = "failed to update CR status"
+	errInstanceUpdateIPFailed    = "failed to update instance security IP list"
+	errInstanceUpdateSpecFailed  = "failed to update instance spec"
+	errInstanceUpdateParamFailed = "failed to update instance parameters"
 
 	errCreateFailed        = "cannot create redis instance"
 	errCreateAccountFailed = "cannot create redis account"
@@ -191,10 +192,14 @@ func (e *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	var paramsNeedUpdate bool
 	if cr.Status.AtProvider.InstanceStatus == v1alpha1.RedisInstanceStateRunning {
 		// Check for Spec update
-		paramsNeedUpdate = redis.ParamsNeedUpdate(resp, &cr.Spec.ForProvider) != nil
+		specsNeedUpdate = redis.SpecsNeedUpdate(resp, &cr.Spec.ForProvider) != nil
 
 		// Check for parameter update
-		specsNeedUpdate = redis.SpecsNeedUpdate(resp, &cr.Spec.ForProvider) != nil
+		paramsUpdateRequest, err := redis.ParamsNeedUpdate(resp, &cr.Spec.ForProvider)
+		if err != nil {
+			return managed.ExternalObservation{}, err
+		}
+		paramsNeedUpdate = paramsUpdateRequest != nil
 
 		// Check for whitelist IPs update
 		securityIpsNeedUpdate = redis.SecurityIpsNeedUpdate(resp, &cr.Spec.ForProvider) != nil
@@ -258,7 +263,18 @@ func (e *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 	}
 
 	// Check and update parameters if needed
-	// paramsNeedUpdate :=
+	paramsUpdateRequest, err := redis.ParamsNeedUpdate(resp, &cr.Spec.ForProvider)
+	if err != nil {
+		return managed.ExternalUpdate{}, err
+	}
+
+	if paramsUpdateRequest != nil {
+		err = e.redisClient.ModifyInstanceParams(instanceId, paramsUpdateRequest)
+		if err != nil {
+			return managed.ExternalUpdate{}, errors.Wrap(err, errInstanceUpdateParamFailed)
+		}
+		return managed.ExternalUpdate{}, nil
+	}
 
 	// Check and update security IPs if needed
 	securityIpsUpdate := redis.SecurityIpsNeedUpdate(resp, &cr.Spec.ForProvider)
@@ -267,7 +283,6 @@ func (e *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 		if err != nil {
 			return managed.ExternalUpdate{}, errors.Wrap(err, errInstanceUpdateIPFailed)
 		}
-
 		return managed.ExternalUpdate{}, nil
 	}
 

@@ -46,10 +46,13 @@ const (
 	DefaultEffectiveTime   = "Immediately"
 
 	// Errors
-	errInstanceNotFound       = "InstanceNotFound"
-	errInstanceNotFoundCode   = "InvalidInstanceId.NotFound"
-	errDescribeInstanceFailed = "cannot describe instance attributes"
-	errGeneratePasswordFailed = "cannot generate a password"
+	errInstanceNotFound              = "InstanceNotFound"
+	errInstanceNotFoundCode          = "InvalidInstanceId.NotFound"
+	errDescribeInstanceFailed        = "cannot describe instance attributes"
+	errGeneratePasswordFailed        = "cannot generate a password"
+	errFailedToUnmarshalWantedConfig = "cannot unmarshal the json config from users input"
+	errFailedToUnmarshalRealConfig   = "cannot unmarshal the json config from the real instance"
+	errFailedToMarshalConfig         = "cannot marshal the json config for the update params request"
 )
 
 // Same server error but without requestID
@@ -339,13 +342,55 @@ func (c *client) ModifyInstanceSpecs(id string, req *aliredis.ModifyInstanceSpec
 
 // Check if the Parameter configuration needs to be updated
 // Return empty string if there is no difference, else return the modify instance param request
-func ParamsNeedUpdate(attr *aliredis.DBInstanceAttribute, p *v1alpha1.RedisInstanceParameters) *aliredis.ModifyInstanceParameterRequest {
+func ParamsNeedUpdate(attr *aliredis.DBInstanceAttribute, p *v1alpha1.RedisInstanceParameters) (*aliredis.ModifyInstanceParameterRequest, error) {
 	return calculateParamDiff(attr, p)
 }
 
 // Calculate the difference between the resource parameter configuration and what's actually configured
-func calculateParamDiff(attr *aliredis.DBInstanceAttribute, p *v1alpha1.RedisInstanceParameters) *aliredis.ModifyInstanceParameterRequest {
-	return nil
+func calculateParamDiff(attr *aliredis.DBInstanceAttribute, p *v1alpha1.RedisInstanceParameters) (*aliredis.ModifyInstanceParameterRequest, error) {
+	if p.ParameterConfig == "" {
+		return nil, nil
+	}
+
+	var actual, wanted map[string]string
+	var err error
+	err = json.Unmarshal([]byte(attr.Config), &actual)
+	if err != nil {
+		return nil, errors.Wrap(err, errFailedToUnmarshalRealConfig)
+	}
+
+	err = json.Unmarshal([]byte(p.ParameterConfig), &wanted)
+	if err != nil {
+		return nil, errors.Wrap(err, errFailedToUnmarshalWantedConfig)
+	}
+
+	needUpdate := false
+	for key, val := range wanted {
+		actualVal, ok := actual[key]
+		// Update if the param is different
+		if ok && actualVal != val {
+			actual[key] = val
+			needUpdate = true
+		}
+		// Create if the param does not exist
+		if !ok {
+			actual[key] = val
+			needUpdate = true
+		}
+	}
+
+	configStr, err := json.Marshal(actual)
+	if err != nil {
+		return nil, errors.Wrap(err, errFailedToMarshalConfig)
+	}
+
+	if needUpdate {
+		req := aliredis.CreateModifyInstanceParameterRequest()
+		req.Parameters = string(configStr)
+		return req, nil
+	}
+
+	return nil, nil
 }
 
 // Send Modify Param request

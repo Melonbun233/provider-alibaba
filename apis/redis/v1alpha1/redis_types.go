@@ -351,7 +351,15 @@ type RedisInstanceParameters struct {
 	// Valid values:
 	//		Immediately (default): The configurations are immediately changed
 	//		MaintainTime: The configurations are changed within the maintenance window.
+	// +optional
 	EffectiveTime string `json:"effectiveTime,omitempty"`
+
+	// The instance parameter settings that you want to modify.
+	// Specify this parameter in the JSON format.
+	// The new value of a parameter overwrites the original value.
+	// Supported parameters can be found here: https://www.alibabacloud.com/help/en/redis/user-guide/supported-parameters
+	// +optional
+	ParameterConfig string `json:"parameterConfig,omitempty"`
 }
 
 // RedisInstanceObservation is the representation of the current state that is observed.
