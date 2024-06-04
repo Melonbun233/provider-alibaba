@@ -310,8 +310,8 @@ func SpecsNeedUpdate(attr *aliredis.DBInstanceAttribute, p *v1alpha1.RedisInstan
 }
 
 // Calculate the difference between the resource spec and what's actually configured
-// Note that Major and Minor versions should be set by separate calls
 // Only support certain updates on specs, and we update the specs one by one to avoid conflicts
+// Note that Major and Minor versions, adding or deleting shards should be set by separate calls
 func calculateSpecDiff(attr *aliredis.DBInstanceAttribute, p *v1alpha1.RedisInstanceParameters) *aliredis.ModifyInstanceSpecRequest {
 	diff := aliredis.CreateModifyInstanceSpecRequest()
 
@@ -331,11 +331,6 @@ func calculateSpecDiff(attr *aliredis.DBInstanceAttribute, p *v1alpha1.RedisInst
 			diff.InstanceClass = p.InstanceClass
 			return diff
 		}
-	}
-
-	if p.ShardCount != nil && attr.ShardCount != *p.ShardCount {
-		diff.ShardCount = requests.NewInteger(*p.ShardCount)
-		return diff
 	}
 
 	if p.ReadOnlyCount != nil && attr.ReadOnlyCount != *p.ReadOnlyCount {
