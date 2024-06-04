@@ -188,19 +188,21 @@ func (e *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 
 	var securityIpsNeedUpdate bool
 	var specsNeedUpdate bool
+	var paramsNeedUpdate bool
 	if cr.Status.AtProvider.InstanceStatus == v1alpha1.RedisInstanceStateRunning {
-		// TODO: Check for Spec update
+		// Check for Spec update
+		paramsNeedUpdate = redis.ParamsNeedUpdate(resp, &cr.Spec.ForProvider) != nil
 
-		// TODO: Check for parameter update
+		// Check for parameter update
 		specsNeedUpdate = redis.SpecsNeedUpdate(resp, &cr.Spec.ForProvider) != nil
 
 		// Check for whitelist IPs update
-		securityIpsNeedUpdate = redis.SecurityIpsNeedUpdate(resp, &cr.Spec.ForProvider)
+		securityIpsNeedUpdate = redis.SecurityIpsNeedUpdate(resp, &cr.Spec.ForProvider) != nil
 	}
 
 	return managed.ExternalObservation{
 		ResourceExists:    true,
-		ResourceUpToDate:  !securityIpsNeedUpdate && !specsNeedUpdate,
+		ResourceUpToDate:  !securityIpsNeedUpdate && !specsNeedUpdate && !paramsNeedUpdate,
 		ConnectionDetails: getConnectionDetails(conn),
 	}, nil
 }
@@ -245,21 +247,23 @@ func (e *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalUpdate{}, nil
 	}
 
-	// TODO: Check and update spec if needed
+	// Check and update spec if needed
 	specsUpdateRequest := redis.SpecsNeedUpdate(resp, &cr.Spec.ForProvider)
 	if specsUpdateRequest != nil {
-		err = e.redisClient.ModifyInstanceSpec(instanceId, specsUpdateRequest)
+		err = e.redisClient.ModifyInstanceSpecs(instanceId, specsUpdateRequest)
 		if err != nil {
 			return managed.ExternalUpdate{}, errors.Wrap(err, errInstanceUpdateSpecFailed)
 		}
 		return managed.ExternalUpdate{}, nil
 	}
 
-	// TODO: Check and update parameters if needed
+	// Check and update parameters if needed
+	// paramsNeedUpdate :=
 
 	// Check and update security IPs if needed
-	if redis.SecurityIpsNeedUpdate(resp, &cr.Spec.ForProvider) {
-		err = e.redisClient.ModifySecurityIps(instanceId, cr.Spec.ForProvider.SecurityIps)
+	securityIpsUpdate := redis.SecurityIpsNeedUpdate(resp, &cr.Spec.ForProvider)
+	if securityIpsUpdate != nil {
+		err = e.redisClient.ModifySecurityIps(instanceId, securityIpsUpdate)
 		if err != nil {
 			return managed.ExternalUpdate{}, errors.Wrap(err, errInstanceUpdateIPFailed)
 		}

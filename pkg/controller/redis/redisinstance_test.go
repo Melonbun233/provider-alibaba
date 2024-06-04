@@ -634,23 +634,23 @@ func (c *fakeRedisClient) DeleteInstance(id string) error {
 	return nil
 }
 
-func (c *fakeRedisClient) UpdateInstance(id string, req *redis.ModifyRedisInstanceRequest) error {
-	if id != testId {
-		return errors.New("Update: client doesn't work")
-	}
-	return nil
-}
-
-func (c *fakeRedisClient) ModifySecurityIps(id string, ips string) error {
+func (c *fakeRedisClient) ModifySecurityIps(id string, req *aliredis.ModifySecurityIpsRequest) error {
 	if id != testId {
 		return errors.New("ModifySecurityIps: client doesn't work")
 	}
 	return nil
 }
 
-func (c *fakeRedisClient) ModifyInstanceSpec(id string, req *aliredis.ModifyInstanceSpecRequest) error {
+func (c *fakeRedisClient) ModifyInstanceSpecs(id string, req *aliredis.ModifyInstanceSpecRequest) error {
 	if id != testId {
-		return errors.New("ModifyInstanceSpec: client doesn't work")
+		return errors.New("ModifyInstanceSpecs: client doesn't work")
+	}
+	return nil
+}
+
+func (c *fakeRedisClient) ModifyInstanceParams(id string, req *aliredis.ModifyInstanceParameterRequest) error {
+	if id != testId {
+		return errors.New("ModifyInstanceParams: client doesn't work")
 	}
 	return nil
 }

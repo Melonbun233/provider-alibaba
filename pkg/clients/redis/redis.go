@@ -67,8 +67,9 @@ type Client interface {
 	CreateInstance(name string, parameters *v1alpha1.RedisInstanceParameters) (*aliredis.CreateInstanceResponse, *RedisConnection, error)
 	DeleteInstance(id string) error
 
-	ModifyInstanceSpec(id string, req *aliredis.ModifyInstanceSpecRequest) error
-	ModifySecurityIps(id string, ips string) error
+	ModifyInstanceSpecs(id string, req *aliredis.ModifyInstanceSpecRequest) error
+	ModifyInstanceParams(id string, req *aliredis.ModifyInstanceParameterRequest) error
+	ModifySecurityIps(id string, req *aliredis.ModifySecurityIpsRequest) error
 }
 
 // ModifyRedisInstanceRequest defines the request info to modify DB Instance
@@ -263,29 +264,33 @@ func (c *client) modifyInstanceSpec(id string, req *ModifyRedisInstanceRequest) 
 
 // Check if the whitelist IPs (IPv4) in Redis parameters are different than what are actually configured
 // Return true if there are differences
-func SecurityIpsNeedUpdate(attr *aliredis.DBInstanceAttribute, p *v1alpha1.RedisInstanceParameters) bool {
+func SecurityIpsNeedUpdate(attr *aliredis.DBInstanceAttribute, p *v1alpha1.RedisInstanceParameters) *aliredis.ModifySecurityIpsRequest {
 	if p.SecurityIps == "" {
-		return false
+		return nil
 	}
 
 	ips := strings.Split(attr.SecurityIPList, ",")
+	needUpdate := false
 	for _, ip := range ips {
 		if !strings.Contains(p.SecurityIps, ip) {
-			return true
+			needUpdate = true
+			break
 		}
 	}
 
-	return false
+	if needUpdate {
+		req := aliredis.CreateModifySecurityIpsRequest()
+		req.SecurityIps = p.SecurityIps
+		req.ModifyMode = DefaultIPModifyMode
+		return req
+	}
+
+	return nil
 }
 
 // Send Modify IP request
-func (c *client) ModifySecurityIps(id string, ips string) error {
-	req := aliredis.CreateModifySecurityIpsRequest()
-
+func (c *client) ModifySecurityIps(id string, req *aliredis.ModifySecurityIpsRequest) error {
 	req.InstanceId = id
-	req.SecurityIps = ips
-	req.ModifyMode = DefaultIPModifyMode
-
 	_, err := c.redisCli.ModifySecurityIps(req)
 	return CleanError(err)
 }
@@ -326,9 +331,27 @@ func calculateSpecDiff(attr *aliredis.DBInstanceAttribute, p *v1alpha1.RedisInst
 }
 
 // Send Modify Spec request
-func (c *client) ModifyInstanceSpec(id string, req *aliredis.ModifyInstanceSpecRequest) error {
+func (c *client) ModifyInstanceSpecs(id string, req *aliredis.ModifyInstanceSpecRequest) error {
 	req.InstanceId = id
 	_, err := c.redisCli.ModifyInstanceSpec(req)
+	return CleanError(err)
+}
+
+// Check if the Parameter configuration needs to be updated
+// Return empty string if there is no difference, else return the modify instance param request
+func ParamsNeedUpdate(attr *aliredis.DBInstanceAttribute, p *v1alpha1.RedisInstanceParameters) *aliredis.ModifyInstanceParameterRequest {
+	return calculateParamDiff(attr, p)
+}
+
+// Calculate the difference between the resource parameter configuration and what's actually configured
+func calculateParamDiff(attr *aliredis.DBInstanceAttribute, p *v1alpha1.RedisInstanceParameters) *aliredis.ModifyInstanceParameterRequest {
+	return nil
+}
+
+// Send Modify Param request
+func (c *client) ModifyInstanceParams(id string, req *aliredis.ModifyInstanceParameterRequest) error {
+	req.InstanceId = id
+	_, err := c.redisCli.ModifyInstanceParameter(req)
 	return CleanError(err)
 }
 
