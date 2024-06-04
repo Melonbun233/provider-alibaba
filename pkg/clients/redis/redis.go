@@ -45,6 +45,11 @@ const (
 	EffectiveTimeMaintain  = "MaintainTime"
 	DefaultEffectiveTime   = "Immediately"
 
+	// Architecture type
+	RedisArchTypeCluster  = "cluster"
+	RedisArchTypeStandard = "standard"
+	RedisArchTypeRWSplit  = "rwsplit"
+
 	// Errors
 	errInstanceNotFound              = "InstanceNotFound"
 	errInstanceNotFoundCode          = "InvalidInstanceId.NotFound"
@@ -315,9 +320,17 @@ func calculateSpecDiff(attr *aliredis.DBInstanceAttribute, p *v1alpha1.RedisInst
 		diff.EffectiveTime = p.EffectiveTime
 	}
 
-	if attr.InstanceClass != p.InstanceClass {
-		diff.InstanceClass = p.InstanceClass
-		return diff
+	// The real instance class should be in the RealInstanceClass parameter if it's a sharded instance
+	if attr.ArchitectureType == RedisArchTypeCluster {
+		if attr.RealInstanceClass != p.InstanceClass {
+			diff.InstanceClass = p.InstanceClass
+			return diff
+		}
+	} else {
+		if attr.InstanceClass != p.InstanceClass {
+			diff.InstanceClass = p.InstanceClass
+			return diff
+		}
 	}
 
 	if p.ShardCount != nil && attr.ShardCount != *p.ShardCount {
