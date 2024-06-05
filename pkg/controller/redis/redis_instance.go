@@ -194,6 +194,10 @@ func (e *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		// Check for Spec update
 		specsNeedUpdate = redis.SpecsNeedUpdate(resp, &cr.Spec.ForProvider) != nil
 
+		// TODO: Check for Sharding update
+
+		// TODO: Check for Version update
+
 		// Check for parameter update
 		paramsUpdateRequest, err := redis.ParamsNeedUpdate(resp, &cr.Spec.ForProvider)
 		if err != nil {

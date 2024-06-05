@@ -19,6 +19,7 @@ package redis
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -76,7 +77,7 @@ type Client interface {
 	DeleteInstance(id string) error
 
 	ModifyInstanceSpecs(id string, req *aliredis.ModifyInstanceSpecRequest) error
-	ModifyInstanceParams(id string, req *aliredis.ModifyInstanceParameterRequest) error
+	ModifyInstanceParams(id string, req *aliredis.ModifyInstanceConfigRequest) error
 	ModifySecurityIps(id string, req *aliredis.ModifySecurityIpsRequest) error
 }
 
@@ -231,9 +232,15 @@ func (c *client) DeleteInstance(id string) error {
 // redis.DBInstance.
 func GenerateObservation(attr *aliredis.DBInstanceAttribute) v1alpha1.RedisInstanceObservation {
 	return v1alpha1.RedisInstanceObservation{
-		InstanceStatus:   attr.InstanceStatus,
-		ConnectionDomain: attr.ConnectionDomain,
-		Port:             strconv.FormatInt(attr.Port, 10),
+		InstanceStatus:    attr.InstanceStatus,
+		ConnectionDomain:  attr.ConnectionDomain,
+		Port:              strconv.FormatInt(attr.Port, 10),
+		VpcAuthMode:       attr.VpcAuthMode,
+		ArchitectureType:  attr.ArchitectureType,
+		Config:            attr.Config,
+		SecurityIPList:    attr.SecurityIPList,
+		InstanceClass:     attr.InstanceClass,
+		RealInstanceClass: attr.RealInstanceClass,
 	}
 }
 
@@ -350,17 +357,17 @@ func (c *client) ModifyInstanceSpecs(id string, req *aliredis.ModifyInstanceSpec
 
 // Check if the Parameter configuration needs to be updated
 // Return empty string if there is no difference, else return the modify instance param request
-func ParamsNeedUpdate(attr *aliredis.DBInstanceAttribute, p *v1alpha1.RedisInstanceParameters) (*aliredis.ModifyInstanceParameterRequest, error) {
+func ParamsNeedUpdate(attr *aliredis.DBInstanceAttribute, p *v1alpha1.RedisInstanceParameters) (*aliredis.ModifyInstanceConfigRequest, error) {
 	return calculateParamDiff(attr, p)
 }
 
 // Calculate the difference between the resource parameter configuration and what's actually configured
-func calculateParamDiff(attr *aliredis.DBInstanceAttribute, p *v1alpha1.RedisInstanceParameters) (*aliredis.ModifyInstanceParameterRequest, error) {
+func calculateParamDiff(attr *aliredis.DBInstanceAttribute, p *v1alpha1.RedisInstanceParameters) (*aliredis.ModifyInstanceConfigRequest, error) {
 	if p.ParameterConfig == "" {
 		return nil, nil
 	}
 
-	var actual, wanted map[string]string
+	var actual, wanted, diff map[string]interface{}
 	var err error
 	err = json.Unmarshal([]byte(attr.Config), &actual)
 	if err != nil {
@@ -373,28 +380,24 @@ func calculateParamDiff(attr *aliredis.DBInstanceAttribute, p *v1alpha1.RedisIns
 	}
 
 	needUpdate := false
+	diff = make(map[string]interface{})
 	for key, val := range wanted {
 		actualVal, ok := actual[key]
-		// Update if the param is different
-		if ok && actualVal != val {
-			actual[key] = val
-			needUpdate = true
-		}
-		// Create if the param does not exist
-		if !ok {
-			actual[key] = val
+		// Update if the param is different, Or Create if the param does not exist
+		if (ok && actualVal != val) || !ok {
+			diff[key] = val
 			needUpdate = true
 		}
 	}
 
-	configStr, err := json.Marshal(actual)
+	configStr, err := json.Marshal(diff)
 	if err != nil {
 		return nil, errors.Wrap(err, errFailedToMarshalConfig)
 	}
 
 	if needUpdate {
-		req := aliredis.CreateModifyInstanceParameterRequest()
-		req.Parameters = string(configStr)
+		req := aliredis.CreateModifyInstanceConfigRequest()
+		req.Config = string(configStr)
 		return req, nil
 	}
 
@@ -402,9 +405,10 @@ func calculateParamDiff(attr *aliredis.DBInstanceAttribute, p *v1alpha1.RedisIns
 }
 
 // Send Modify Param request
-func (c *client) ModifyInstanceParams(id string, req *aliredis.ModifyInstanceParameterRequest) error {
+func (c *client) ModifyInstanceParams(id string, req *aliredis.ModifyInstanceConfigRequest) error {
 	req.InstanceId = id
-	_, err := c.redisCli.ModifyInstanceParameter(req)
+	println(fmt.Sprintf("Config is about to be updated: %s", req.Config))
+	_, err := c.redisCli.ModifyInstanceConfig(req)
 	return CleanError(err)
 }
 

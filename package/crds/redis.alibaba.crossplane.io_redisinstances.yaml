@@ -355,13 +355,41 @@ spec:
                     description: InstanceStatus specifies the current state of this
                       database.
                     type: string
+                  architectureType:
+                    description: 'The architecture of the instance. Valid values:
+                      cluster: cluster architecture standard: standard architecture
+                      rwsplit: read/write splitting architecture'
+                    type: string
+                  config:
+                    description: 'The parameter configurations of the instance in
+                      the JSON format. For more information, see Parameter descriptions:
+                      https://www.alibabacloud.com/help/en/redis/user-guide/supported-parameters'
+                    type: string
                   connectionDomain:
                     description: ConnectionDomain contains domain name used to connect
                       with the Redis instance
                     type: string
+                  instanceClass:
+                    description: The instance type
+                    type: string
                   port:
                     description: Port contains the port number used to connect with
                       the Redis instance
+                    type: string
+                  realInstanceClass:
+                    description: If the instance is a cluster instance that uses cloud
+                      disks, this parameter indicates the actual instance type of
+                      individual shards in the instance. The InstanceClass parameter
+                      indicates the virtual instance type.
+                    type: string
+                  securityIPList:
+                    description: The IP addresses in the whitelist.
+                    type: string
+                  vpcAuthMode:
+                    description: 'Indicates whether password authentication is enabled.
+                      Valid values: Open: Password authentication is enabled. Close:
+                      Password authentication is disabled and password-free access
+                      is enabled.'
                     type: string
                 type: object
               conditions:

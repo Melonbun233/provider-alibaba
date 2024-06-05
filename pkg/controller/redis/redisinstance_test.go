@@ -648,7 +648,7 @@ func (c *fakeRedisClient) ModifyInstanceSpecs(id string, req *aliredis.ModifyIns
 	return nil
 }
 
-func (c *fakeRedisClient) ModifyInstanceParams(id string, req *aliredis.ModifyInstanceParameterRequest) error {
+func (c *fakeRedisClient) ModifyInstanceParams(id string, req *aliredis.ModifyInstanceConfigRequest) error {
 	if id != testId {
 		return errors.New("ModifyInstanceParams: client doesn't work")
 	}

@@ -372,4 +372,30 @@ type RedisInstanceObservation struct {
 
 	// Port contains the port number used to connect with the Redis instance
 	Port string `json:"port,omitempty"`
+
+	// Indicates whether password authentication is enabled. Valid values:
+	//		Open: Password authentication is enabled.
+	//		Close: Password authentication is disabled and password-free access is enabled.
+	VpcAuthMode string `json:"vpcAuthMode,omitempty"`
+
+	// The architecture of the instance. Valid values:
+	//		cluster: cluster architecture
+	//		standard: standard architecture
+	//		rwsplit: read/write splitting architecture
+	ArchitectureType string `json:"architectureType,omitempty"`
+
+	// The parameter configurations of the instance in the JSON format.
+	// For more information, see Parameter descriptions: https://www.alibabacloud.com/help/en/redis/user-guide/supported-parameters
+	Config string `json:"config,omitempty"`
+
+	// The IP addresses in the whitelist.
+	SecurityIPList string `json:"securityIPList,omitempty"`
+
+	// The instance type
+	InstanceClass string `json:"instanceClass,omitempty"`
+
+	// If the instance is a cluster instance that uses cloud disks,
+	// this parameter indicates the actual instance type of individual shards in the instance.
+	// The InstanceClass parameter indicates the virtual instance type.
+	RealInstanceClass string `json:"realInstanceClass,omitempty"`
 }
