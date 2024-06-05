@@ -19,7 +19,6 @@ package redis
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -407,7 +406,6 @@ func calculateParamDiff(attr *aliredis.DBInstanceAttribute, p *v1alpha1.RedisIns
 // Send Modify Param request
 func (c *client) ModifyInstanceParams(id string, req *aliredis.ModifyInstanceConfigRequest) error {
 	req.InstanceId = id
-	println(fmt.Sprintf("Config is about to be updated: %s", req.Config))
 	_, err := c.redisCli.ModifyInstanceConfig(req)
 	return CleanError(err)
 }
